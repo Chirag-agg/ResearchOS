@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlmodel import SQLModel
 from app.core.config import settings
 from app.models.session import ResearchSession
+from app.models.query import GeneratedQuery
+from app.models.search import SearchResult
 
 # SQLite requires check_same_thread=False when sharing connections across threads (default FastAPI behavior)
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}

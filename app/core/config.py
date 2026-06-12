@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./research_os.db"
     OLLAMA_API_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "llama3"
+    SEARXNG_URL: str = "http://localhost:8080"
 
 
 settings = Settings()

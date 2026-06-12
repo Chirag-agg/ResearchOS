@@ -4,7 +4,10 @@ from app.core.db import async_session_maker
 from app.core.config import settings
 from fastapi import Depends
 from app.services.llm import LLMService
+from app.services.search import SearchService
 from app.repositories.session import SessionRepository
+from app.repositories.query import QueryRepository
+from app.repositories.search_result import SearchResultRepository
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -31,3 +34,24 @@ def get_session_repository(session: AsyncSession = Depends(get_db)) -> SessionRe
     Dependency injector that initializes and returns a SessionRepository instance.
     """
     return SessionRepository(session)
+
+
+def get_search_service() -> SearchService:
+    """
+    Dependency injector for the SearchService, initialized with SearXNG URL.
+    """
+    return SearchService(api_url=settings.SEARXNG_URL)
+
+
+def get_query_repository(session: AsyncSession = Depends(get_db)) -> QueryRepository:
+    """
+    Dependency injector that initializes and returns a QueryRepository instance.
+    """
+    return QueryRepository(session)
+
+
+def get_search_result_repository(session: AsyncSession = Depends(get_db)) -> SearchResultRepository:
+    """
+    Dependency injector that initializes and returns a SearchResultRepository instance.
+    """
+    return SearchResultRepository(session)
