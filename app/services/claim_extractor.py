@@ -123,7 +123,7 @@ class ClaimExtractor:
 
         max_retries = 3
         backoff_delay = 1.0
-        timeout = httpx.Timeout(30.0)
+        timeout = httpx.Timeout(180.0)
 
         for attempt in range(max_retries):
             try:

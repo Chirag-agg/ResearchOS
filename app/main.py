@@ -1,5 +1,12 @@
 from contextlib import asynccontextmanager
 from typing import Dict
+import sys
+import asyncio
+
+if sys.platform == "win32":
+    # Explicitly configure Windows Proactor event loop to support subprocesses (required by Playwright)
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from app.core.config import settings
 from app.core.db import init_db, async_session_maker
