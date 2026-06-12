@@ -66,3 +66,21 @@ class FetchedPageRepository:
         )
         result = await self.session.execute(statement)
         return list(result.scalars().all())
+
+    async def get_with_search_result_by_session(
+        self, session_id: UUID
+    ) -> List[tuple[FetchedPage, SearchResult]]:
+        """
+        Retrieve all fetched pages and their linked SearchResult for a session.
+        Used to extract metadata and query association (query_id).
+        """
+        statement = (
+            select(FetchedPage, SearchResult)
+            .join(SearchResult, FetchedPage.search_result_id == SearchResult.id)
+            .join(GeneratedQuery, SearchResult.query_id == GeneratedQuery.id)
+            .where(GeneratedQuery.session_id == session_id)
+            .order_by(FetchedPage.extraction_quality_score.desc())
+        )
+        result = await self.session.execute(statement)
+        return list(result.all())
+

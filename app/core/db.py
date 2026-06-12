@@ -8,6 +8,7 @@ from app.models.search import SearchResult
 from app.models.fetched_page import FetchedPage
 from app.models.step import ResearchStep
 from app.models.event import ResearchEvent
+from app.models.claim import ExtractedClaim
 
 # SQLite requires check_same_thread=False when sharing connections across threads (default FastAPI behavior)
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}

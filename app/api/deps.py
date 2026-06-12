@@ -12,6 +12,8 @@ from app.repositories.search_result import SearchResultRepository
 from app.repositories.fetched_page import FetchedPageRepository
 from app.repositories.event import EventRepository
 from app.events.bus import EventBus
+from app.services.claim_extractor import ClaimExtractor
+from app.repositories.claim import ClaimRepository
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -92,4 +94,21 @@ def get_event_repository(session: AsyncSession = Depends(get_db)) -> EventReposi
     Dependency injector that initializes and returns an EventRepository instance.
     """
     return EventRepository(session)
+
+
+def get_claim_extractor() -> ClaimExtractor:
+    """
+    Dependency injector for the ClaimExtractor service, initialized with core configuration.
+    """
+    return ClaimExtractor(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
+
+def get_claim_repository(session: AsyncSession = Depends(get_db)) -> ClaimRepository:
+    """
+    Dependency injector that initializes and returns a ClaimRepository instance.
+    """
+    return ClaimRepository(session)
 
