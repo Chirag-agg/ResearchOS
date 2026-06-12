@@ -20,6 +20,9 @@ ENV/
 *.db-shm
 *.log
 
+# Raw HTML storage (fetched pages)
+storage/
+
 # Pytest / Coverage caches
 .pytest_cache/
 .coverage
@@ -37,3 +40,8 @@ htmlcov/
 *.njsproj
 *.sln
 *.swp
+
+# Documentation not to be pushed to GitHub
+architecture_specification.md
+walkthrough.md
+

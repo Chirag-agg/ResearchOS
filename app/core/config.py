@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     OLLAMA_API_URL: str = "http://localhost:11434"
     LLM_MODEL: str = "llama3"
     SEARXNG_URL: str = "http://localhost:8080"
+    MAX_CONCURRENT_FETCHES: int = 5
+    PLAYWRIGHT_TIMEOUT_MS: int = 30000
+    HTML_STORAGE_DIR: str = "storage/html"
 
 
 settings = Settings()

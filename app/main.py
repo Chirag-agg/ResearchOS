@@ -2,17 +2,30 @@ from contextlib import asynccontextmanager
 from typing import Dict
 from fastapi import FastAPI
 from app.core.config import settings
-from app.core.db import init_db
+from app.core.db import init_db, async_session_maker
 from app.api.v1.router import api_router
+from app.events.bus import EventBus
+from app.events.logger import EventLogger
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Handles startup and shutdown events for the FastAPI application.
-    Initializes SQLModel SQLite database tables on startup.
+    Initializes database tables, creates the EventBus singleton, and
+    registers the EventLogger subscriber for automatic event persistence.
     """
+    # Initialize database
     await init_db()
+
+    # Initialize event infrastructure
+    event_bus = EventBus()
+    event_logger = EventLogger(session_maker=async_session_maker)
+    event_bus.subscribe_all(event_logger.handle_event)
+
+    # Store EventBus in app state for dependency injection
+    app.state.event_bus = event_bus
+
     yield
 
 
@@ -48,3 +61,4 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 # Expose research routes directly at the root level to support POST /research
 from app.api.v1.endpoints import research
 app.include_router(research.router)
+

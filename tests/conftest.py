@@ -12,6 +12,7 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Import app components after environment variable override
 from app.main import app
 from app.api.deps import get_db
+from app.events.bus import EventBus
 
 # Create test engine and sessionmaker
 test_engine = create_async_engine(
@@ -61,11 +62,16 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """
     Provides an HTTPX AsyncClient configured to request endpoints against the FastAPI app
     with get_db dependency overridden to use the test database session.
+    Also initializes a test EventBus in app.state for event-publishing endpoints.
     """
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+
+    # Ensure EventBus is available in app.state for tests
+    if not hasattr(app.state, "event_bus"):
+        app.state.event_bus = EventBus()
     
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
@@ -73,3 +79,4 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
         
     app.dependency_overrides.clear()
+

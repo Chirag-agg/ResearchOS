@@ -5,6 +5,9 @@ from app.core.config import settings
 from app.models.session import ResearchSession
 from app.models.query import GeneratedQuery
 from app.models.search import SearchResult
+from app.models.fetched_page import FetchedPage
+from app.models.step import ResearchStep
+from app.models.event import ResearchEvent
 
 # SQLite requires check_same_thread=False when sharing connections across threads (default FastAPI behavior)
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}

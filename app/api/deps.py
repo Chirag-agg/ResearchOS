@@ -2,12 +2,16 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session_maker
 from app.core.config import settings
-from fastapi import Depends
+from fastapi import Depends, Request
 from app.services.llm import LLMService
 from app.services.search import SearchService
+from app.services.scraper import ScraperService
 from app.repositories.session import SessionRepository
 from app.repositories.query import QueryRepository
 from app.repositories.search_result import SearchResultRepository
+from app.repositories.fetched_page import FetchedPageRepository
+from app.repositories.event import EventRepository
+from app.events.bus import EventBus
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -55,3 +59,37 @@ def get_search_result_repository(session: AsyncSession = Depends(get_db)) -> Sea
     Dependency injector that initializes and returns a SearchResultRepository instance.
     """
     return SearchResultRepository(session)
+
+
+def get_scraper_service() -> ScraperService:
+    """
+    Dependency injector for the ScraperService, initialized with Playwright
+    timeout and HTML storage directory from settings.
+    """
+    return ScraperService(
+        timeout_ms=settings.PLAYWRIGHT_TIMEOUT_MS,
+        html_storage_dir=settings.HTML_STORAGE_DIR,
+    )
+
+
+def get_fetched_page_repository(session: AsyncSession = Depends(get_db)) -> FetchedPageRepository:
+    """
+    Dependency injector that initializes and returns a FetchedPageRepository instance.
+    """
+    return FetchedPageRepository(session)
+
+
+def get_event_bus(request: Request) -> EventBus:
+    """
+    Dependency injector that returns the application-wide EventBus singleton
+    stored in app.state during lifespan startup.
+    """
+    return request.app.state.event_bus
+
+
+def get_event_repository(session: AsyncSession = Depends(get_db)) -> EventRepository:
+    """
+    Dependency injector that initializes and returns an EventRepository instance.
+    """
+    return EventRepository(session)
+
