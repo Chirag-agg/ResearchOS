@@ -1,52 +1,41 @@
-# Walkthrough - ResearchOS FastAPI Skeleton, PlannerService, & Session Management
+# Walkthrough - ResearchOS FastAPI Skeleton, LLMService, & Session Management
 
-We have successfully set up the database persistence layer and session CRUD actions for ResearchOS (Phase 1).
+We have successfully integrated the `LLMService` leveraging a local Ollama LLM provider (Phase 2), alongside the existing database and session management capabilities.
 
 ## Changes Made
 
-### 1. Database & Persistence Layer
-* **`app/models/base.py`**: Created a database-compatible timezone-naive UTC timestamp generator (`get_utc_now`).
-* **`app/models/session.py`**: Defined:
-  * `SessionStatus`: String enum containing `pending`, `running`, `completed`, and `failed`.
-  * `ResearchSession`: SQLModel table representing the database session table (`research_sessions`), complete with UUID primary key generation, type hints, and standard audit fields.
-  * `SessionCreate` & `SessionRead`: DTO validation models to handle safe API inputs and strict responses.
-* **`app/core/db.py`**: Imported `ResearchSession` entity to ensure it registers automatically into the SQLModel metadata, initializing tables when uvicorn starts.
+### 1. Ollama LLM Service & Health Checks
+* **`app/services/llm.py`**: Created `LLMService` to replace `PlannerService`.
+  * `generate_queries(question)`: Invokes the local Ollama LLM using structured JSON generation, breaking down research questions into search query strings.
+  * `check_health()`: Verifies connection status by calling Ollama's base URL and asserting 200 OK.
+* **`app/api/deps.py`**: Updated dependencies to expose `get_llm_service() -> LLMService` instead of `PlannerService`.
+* **`app/api/v1/endpoints/research.py`**: Updated `/research` API endpoint to use `LLMService`.
+* **`app/api/v1/endpoints/health.py`**: Added `GET /api/v1/health/llm` endpoint that calls `llm_service.check_health()` to determine if Ollama is online.
 
-### 2. Session CRUD Repository Pattern
-* **`app/repositories/session.py`**: Implemented `SessionRepository` to abstract database calls:
-  * `create_session(question)`: Generates and inserts a session with `pending` status.
-  * `get_session(session_id)`: Fetches a single session by UUID.
-  * `list_sessions()`: Lists all sessions ordered by creation date descending.
-  * `update_status(session_id, status)`: Safely transitions status and overrides `updated_at`.
-* **`app/api/deps.py`**: Added a dependency injection provider `get_session_repository` that receives the current DB session and spawns the repository.
-
-### 3. API Routing
-* **`app/api/v1/endpoints/sessions.py`**: Implemented FastAPI session routes:
-  * `POST /api/v1/sessions`: Inserts and returns 201 Created.
-  * `GET /api/v1/sessions`: Lists all sessions.
-  * `GET /api/v1/sessions/{id}`: Returns details of a specific session, raising 404 if not found.
-* **`app/api/v1/router.py`**: Integrated the new sessions router.
+### 2. Cleanup
+* Deleted obsolete module: `app/services/planner.py`
+* Deleted obsolete test file: `tests/test_planner.py`
 
 ---
 
 ## Verification and Testing
 
-### Automated Test Suite (`tests/test_sessions.py`)
-We added 9 detailed test cases covering repository routines and API router endpoints:
-* **Repository Methods**:
-  * `test_repo_create_session`: Confirms insertion defaults.
-  * `test_repo_get_session`: Confirms correct retrieval.
-  * `test_repo_get_non_existent`: Confirms `None` on missing session IDs.
-  * `test_repo_list_sessions`: Confirms query list and ordering.
-  * `test_repo_update_status`: Confirms state change transitions audit fields correctly.
-* **FastAPI Endpoints**:
-  * `test_api_create_session`: Confirms POST endpoint works, checking default status fields.
-  * `test_api_get_session`: Confirms details are reachable.
-  * `test_api_get_session_404`: Confirms API throws standard 404 status.
-  * `test_api_list_sessions`: Confirms listing response format matches.
+### Automated Test Suite (`tests/test_llm.py`)
+We added 9 robust test cases targeting the new LLM integrations:
+* **LLM Service Unit Tests**:
+  * `test_llm_service_success`: Verifies correct parsing of JSON query list from LLM output.
+  * `test_llm_service_empty_question`: Ensures empty questions raise `LLMError`.
+  * `test_llm_service_malformed_json`: Validates error handling for invalid JSON response.
+  * `test_llm_service_http_error`: Confirms conversion of HTTP failures to custom errors.
+  * `test_llm_service_health_check_success`: Asserts that online connection checks return `True`.
+  * `test_llm_service_health_check_failure`: Asserts that connection check failures return `False`.
+* **API Endpoints**:
+  * `test_llm_endpoint_success`: Asserts successful posting to `/research`.
+  * `test_llm_health_endpoint_online`: Asserts `/api/v1/health/llm` returns healthy status when online.
+  * `test_llm_health_endpoint_offline`: Asserts `/api/v1/health/llm` returns unhealthy status when offline.
 
 ### Test Execution Results
-All **18 test cases** (skeleton, planner, and sessions) passed successfully:
+All **21 test cases** (health, llm, and sessions) passed successfully:
 
 ```
 platform win32 -- Python 3.13.13, pytest-9.0.3, pluggy-1.6.0
@@ -54,11 +43,18 @@ rootdir: C:\Users\caagg\Desktop\Coding\local_res
 configfile: pytest.ini
 plugins: anyio-4.13.0, asyncio-1.4.0
 asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=session, asyncio_default_test_loop_scope=function
-collected 18 items
+collected 21 items
 
-tests\test_health.py ...                                                 [ 16%]
-tests\test_planner.py ......                                             [ 50%]
+tests\test_health.py ...                                                 [ 14%]
+tests\test_llm.py .........                                              [ 57%]
 tests\test_sessions.py .........                                         [100%]
 
-============================= 18 passed in 1.24s ==============================
+============================= 21 passed in 2.18s ==============================
+```
+
+### Git Repository Status
+The commit has been successfully created and pushed to GitHub:
+```
+To https://github.com/Chirag-agg/ResearchOS
+   66192ba..797c681  main -> main
 ```
