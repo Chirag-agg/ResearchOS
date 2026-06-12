@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session_maker
 from app.core.config import settings
 from fastapi import Depends
-from app.services.planner import PlannerService
+from app.services.llm import LLMService
 from app.repositories.session import SessionRepository
 
 
@@ -16,11 +16,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_planner_service() -> PlannerService:
+def get_llm_service() -> LLMService:
     """
-    Dependency injector for the PlannerService, initialized with core configuration.
+    Dependency injector for the LLMService, initialized with core configuration.
     """
-    return PlannerService(
+    return LLMService(
         api_url=settings.OLLAMA_API_URL,
         model_name=settings.LLM_MODEL
     )
