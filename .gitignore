@@ -1,0 +1,39 @@
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments & virtualenvs
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Databases & logs
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+
+# Pytest / Coverage caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# IDE settings
+.vscode/
+.idea/
+.project
+.pydevproject
+.settings/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
