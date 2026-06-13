@@ -73,6 +73,10 @@ async def extract_session_claims(
             detail="No successfully fetched pages found for this session. Run fetch first."
         )
 
+    # Slice to top pages to prevent infinite execution times on CPU-bound local Ollama
+    from app.core.config import settings
+    successful_pages = successful_pages[:settings.MAX_CLAIM_EXTRACTION_PAGES]
+
     # 4. Set session to running and publish CLAIM_EXTRACTION_STARTED
     await session_repo.update_status(session_id, SessionStatus.RUNNING)
     await event_bus.publish(

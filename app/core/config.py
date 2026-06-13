@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_FETCHES: int = 5
     PLAYWRIGHT_TIMEOUT_MS: int = 30000
     HTML_STORAGE_DIR: str = "storage/html"
+    MAX_CLAIM_EXTRACTION_PAGES: int = 3
 
 
 settings = Settings()
