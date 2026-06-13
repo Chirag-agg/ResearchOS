@@ -37,6 +37,11 @@ class EventType(str, Enum):
     RESEARCH_COMPLETED = "research_completed"
     RESEARCH_FAILED = "research_failed"
 
+    PAGE_ANALYSIS_STARTED = "page_analysis_started"
+    PAGE_ANALYZED = "page_analyzed"
+    PAGE_ANALYSIS_COMPLETED = "page_analysis_completed"
+    PAGE_ANALYSIS_FAILED = "page_analysis_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 

@@ -17,6 +17,8 @@ from app.repositories.claim import ClaimRepository
 from app.repositories.validation import ValidationRepository
 from app.services.validator import ClaimValidator
 from app.services.coordinator import ResearchCoordinator
+from app.repositories.page_knowledge import PageKnowledgeRepository
+from app.services.page_understanding import PageUnderstandingService
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -164,4 +166,21 @@ def get_research_coordinator(
         claim_repo=claim_repo,
         validation_repo=validation_repo,
     )
+
+
+def get_page_understanding_service() -> PageUnderstandingService:
+    """
+    Dependency injector for the PageUnderstandingService, initialized with core configuration.
+    """
+    return PageUnderstandingService(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
+
+def get_page_knowledge_repository(session: AsyncSession = Depends(get_db)) -> PageKnowledgeRepository:
+    """
+    Dependency injector that initializes and returns a PageKnowledgeRepository instance.
+    """
+    return PageKnowledgeRepository(session)
 
