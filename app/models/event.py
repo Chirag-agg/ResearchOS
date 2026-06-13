@@ -42,6 +42,11 @@ class EventType(str, Enum):
     PAGE_ANALYSIS_COMPLETED = "page_analysis_completed"
     PAGE_ANALYSIS_FAILED = "page_analysis_failed"
 
+    KNOWLEDGE_BUILD_STARTED = "knowledge_build_started"
+    KNOWLEDGE_NODE_CREATED = "knowledge_node_created"
+    KNOWLEDGE_BUILD_COMPLETED = "knowledge_build_completed"
+    KNOWLEDGE_BUILD_FAILED = "knowledge_build_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 
