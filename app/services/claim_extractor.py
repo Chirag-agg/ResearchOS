@@ -114,11 +114,31 @@ class ClaimExtractor:
             "JSON Output:\n"
         )
 
+        # Enforce structured JSON schema to guarantee key existence
+        schema = {
+            "type": "object",
+            "properties": {
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "claim_text": { "type": "string" },
+                            "evidence_snippet": { "type": "string" },
+                            "confidence_score": { "type": "number" }
+                        },
+                        "required": ["claim_text", "evidence_snippet", "confidence_score"]
+                    }
+                }
+            },
+            "required": ["claims"]
+        }
+
         payload = {
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
-            "format": "json"
+            "format": schema
         }
 
         max_retries = 3

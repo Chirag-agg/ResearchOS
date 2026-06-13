@@ -90,7 +90,10 @@ async def extract_session_claims(
         seen_hashes = set()
 
         # 5. Extract claims per page
+        from urllib.parse import urlparse
+
         for page, sr in successful_pages:
+            source_domain = urlparse(page.url).netloc
             candidates = await claim_extractor.extract_claims(page.content, page.url)
 
             # 6. Build ExtractedClaim objects and deduplicate by claim_hash
@@ -112,6 +115,7 @@ async def extract_session_claims(
                     evidence_snippet=candidate.evidence_snippet,
                     confidence_score=candidate.confidence_score,
                     source_url=page.url,
+                    source_domain=source_domain,
                     source_chunk_index=chunk_index,
                     source_chunk_hash=chunk_hash,
                 )
@@ -161,6 +165,7 @@ async def extract_session_claims(
                 evidence_snippet=c.evidence_snippet,
                 confidence_score=c.confidence_score,
                 source_url=c.source_url,
+                source_domain=c.source_domain,
                 source_chunk_index=c.source_chunk_index,
                 source_chunk_hash=c.source_chunk_hash,
                 created_at=c.created_at,

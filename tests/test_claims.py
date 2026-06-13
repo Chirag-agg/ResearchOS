@@ -230,6 +230,7 @@ async def test_claim_repository_methods(db_session: AsyncSession):
         evidence_snippet="Factual Statement A",
         confidence_score=0.9,
         source_url="http://url.com",
+        source_domain="url.com",
         source_chunk_index=0,
         source_chunk_hash="chunk_hash_0"
     )
@@ -242,6 +243,7 @@ async def test_claim_repository_methods(db_session: AsyncSession):
         evidence_snippet="Factual Statement B",
         confidence_score=0.85,
         source_url="http://url.com",
+        source_domain="url.com",
         source_chunk_index=0,
         source_chunk_hash="chunk_hash_0"
     )
@@ -375,6 +377,7 @@ async def test_endpoint_claims_success(client, db_session: AsyncSession):
         assert claim["confidence_score"] == 0.9
         assert claim["query_id"] == str(query.id)
         assert claim["source_url"] == "https://rag-comparison.com"
+        assert claim["source_domain"] == "rag-comparison.com"
 
         # Verify SQL database state
         statement = select(ExtractedClaim).where(ExtractedClaim.session_id == session.id)
@@ -382,6 +385,7 @@ async def test_endpoint_claims_success(client, db_session: AsyncSession):
         db_claims = db_results.scalars().all()
         assert len(db_claims) == 1
         assert db_claims[0].claim_text == "RAG is lower cost than fine-tuning."
+        assert db_claims[0].source_domain == "rag-comparison.com"
 
         # Verify Event Bus events were published
         published_types = [call.args[0] for call in spy_publish.call_args_list]

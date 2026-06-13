@@ -49,6 +49,7 @@ class ExtractedClaim(SQLModel, table=True):
     evidence_snippet: str = Field(nullable=False)
     confidence_score: float = Field(nullable=False)
     source_url: str = Field(nullable=False)
+    source_domain: str = Field(nullable=False, index=True)
     source_chunk_index: int = Field(nullable=False)
     source_chunk_hash: str = Field(nullable=False)
     created_at: datetime = Field(
@@ -77,6 +78,7 @@ class ClaimRead(SQLModel):
     evidence_snippet: str
     confidence_score: float
     source_url: str
+    source_domain: str
     source_chunk_index: int
     source_chunk_hash: str
     created_at: datetime
