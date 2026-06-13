@@ -16,6 +16,7 @@ from app.services.claim_extractor import ClaimExtractor
 from app.repositories.claim import ClaimRepository
 from app.repositories.validation import ValidationRepository
 from app.services.validator import ClaimValidator
+from app.services.coordinator import ResearchCoordinator
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -130,4 +131,37 @@ def get_validation_repository(session: AsyncSession = Depends(get_db)) -> Valida
     Dependency injector that initializes and returns a ValidationRepository instance.
     """
     return ValidationRepository(session)
+
+
+def get_research_coordinator(
+    llm_service=Depends(get_llm_service),
+    search_service=Depends(get_search_service),
+    scraper_service=Depends(get_scraper_service),
+    claim_extractor=Depends(get_claim_extractor),
+    validator=Depends(get_claim_validator),
+    event_bus=Depends(get_event_bus),
+    session_repo=Depends(get_session_repository),
+    query_repo=Depends(get_query_repository),
+    search_result_repo=Depends(get_search_result_repository),
+    fetched_page_repo=Depends(get_fetched_page_repository),
+    claim_repo=Depends(get_claim_repository),
+    validation_repo=Depends(get_validation_repository),
+) -> ResearchCoordinator:
+    """
+    Dependency injector for the ResearchCoordinator orchestration service.
+    """
+    return ResearchCoordinator(
+        llm_service=llm_service,
+        search_service=search_service,
+        scraper_service=scraper_service,
+        claim_extractor=claim_extractor,
+        validator=validator,
+        event_bus=event_bus,
+        session_repo=session_repo,
+        query_repo=query_repo,
+        search_result_repo=search_result_repo,
+        fetched_page_repo=fetched_page_repo,
+        claim_repo=claim_repo,
+        validation_repo=validation_repo,
+    )
 

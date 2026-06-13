@@ -33,6 +33,10 @@ class EventType(str, Enum):
     VALIDATION_COMPLETED = "validation_completed"
     VALIDATION_FAILED = "validation_failed"
 
+    RESEARCH_STARTED = "research_started"
+    RESEARCH_COMPLETED = "research_completed"
+    RESEARCH_FAILED = "research_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 

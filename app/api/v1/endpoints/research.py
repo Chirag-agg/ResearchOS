@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, List
 from app.core.config import settings
 from app.models.research import ResearchQuestion, ResearchQueries
+from app.models.coordinator import ResearchRunResult
 from app.models.session import SessionStatus
 from app.models.search import SearchRequest, SearchResponse, SearchResultRead, SearchResult
 from app.models.fetched_page import (
@@ -26,7 +27,9 @@ from app.api.deps import (
     get_search_result_repository,
     get_fetched_page_repository,
     get_event_bus,
+    get_research_coordinator,
 )
+from app.services.coordinator import ResearchCoordinator, CoordinatorError
 
 router = APIRouter()
 
@@ -367,3 +370,31 @@ async def execute_research_fetch(
 
     finally:
         await scraper_service.stop()
+
+
+@router.post(
+    "/research/run",
+    response_model=ResearchRunResult,
+    status_code=status.HTTP_200_OK,
+    summary="Run the full research pipeline orchestrator"
+)
+async def run_research_pipeline(
+    payload: ResearchQuestion,
+    coordinator: ResearchCoordinator = Depends(get_research_coordinator),
+) -> ResearchRunResult:
+    """
+    Triggers and orchestrates the complete end-to-end research pipeline.
+    """
+    try:
+        result = await coordinator.run_research(payload.question)
+        return result
+    except CoordinatorError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during research execution: {e}"
+        )
