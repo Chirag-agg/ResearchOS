@@ -14,6 +14,8 @@ from app.repositories.event import EventRepository
 from app.events.bus import EventBus
 from app.services.claim_extractor import ClaimExtractor
 from app.repositories.claim import ClaimRepository
+from app.repositories.validation import ValidationRepository
+from app.services.validator import ClaimValidator
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -111,4 +113,21 @@ def get_claim_repository(session: AsyncSession = Depends(get_db)) -> ClaimReposi
     Dependency injector that initializes and returns a ClaimRepository instance.
     """
     return ClaimRepository(session)
+
+
+def get_claim_validator() -> ClaimValidator:
+    """
+    Dependency injector for the ClaimValidator service, initialized with core configuration.
+    """
+    return ClaimValidator(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
+
+def get_validation_repository(session: AsyncSession = Depends(get_db)) -> ValidationRepository:
+    """
+    Dependency injector that initializes and returns a ValidationRepository instance.
+    """
+    return ValidationRepository(session)
 

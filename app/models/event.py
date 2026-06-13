@@ -29,6 +29,10 @@ class EventType(str, Enum):
     CLAIM_EXTRACTION_COMPLETED = "claim_extraction_completed"
     CLAIM_EXTRACTION_FAILED = "claim_extraction_failed"
 
+    VALIDATION_STARTED = "validation_started"
+    VALIDATION_COMPLETED = "validation_completed"
+    VALIDATION_FAILED = "validation_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 
