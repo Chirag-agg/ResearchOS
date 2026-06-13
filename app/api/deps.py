@@ -21,6 +21,8 @@ from app.repositories.page_knowledge import PageKnowledgeRepository
 from app.services.page_understanding import PageUnderstandingService
 from app.repositories.knowledge import KnowledgeRepository
 from app.services.knowledge_builder import KnowledgeBuilderService
+from app.repositories.gap import GapRepository
+from app.services.gap_discovery import GapDiscoveryService
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -202,5 +204,23 @@ def get_knowledge_builder_service() -> KnowledgeBuilderService:
         api_url=settings.OLLAMA_API_URL,
         model_name=settings.LLM_MODEL
     )
+
+
+def get_gap_repository(session: AsyncSession = Depends(get_db)) -> GapRepository:
+    """
+    Dependency injector that initializes and returns a GapRepository instance.
+    """
+    return GapRepository(session)
+
+
+def get_gap_discovery_service() -> GapDiscoveryService:
+    """
+    Dependency injector for the GapDiscoveryService, initialized with core configuration.
+    """
+    return GapDiscoveryService(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
 
 

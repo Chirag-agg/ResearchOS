@@ -47,6 +47,11 @@ class EventType(str, Enum):
     KNOWLEDGE_BUILD_COMPLETED = "knowledge_build_completed"
     KNOWLEDGE_BUILD_FAILED = "knowledge_build_failed"
 
+    GAP_DISCOVERY_STARTED = "gap_discovery_started"
+    GAP_FOUND = "gap_found"
+    GAP_DISCOVERY_COMPLETED = "gap_discovery_completed"
+    GAP_DISCOVERY_FAILED = "gap_discovery_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 
