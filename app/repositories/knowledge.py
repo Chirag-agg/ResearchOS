@@ -69,3 +69,12 @@ class KnowledgeRepository:
         )
         result = await self.session.execute(statement)
         return list(result.scalars().all())
+
+    async def clear_session_graph(self, session_id: UUID) -> None:
+        """
+        Delete all knowledge nodes and edges associated with a session.
+        """
+        from sqlalchemy import delete
+        await self.session.execute(delete(KnowledgeEdge).where(KnowledgeEdge.session_id == session_id))
+        await self.session.execute(delete(KnowledgeNode).where(KnowledgeNode.session_id == session_id))
+        await self.session.commit()

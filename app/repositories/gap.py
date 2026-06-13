@@ -41,3 +41,11 @@ class GapRepository:
         )
         result = await self.session.execute(statement)
         return list(result.scalars().all())
+
+    async def clear_session_gaps(self, session_id: UUID) -> None:
+        """
+        Delete all research gaps associated with a session.
+        """
+        from sqlalchemy import delete
+        await self.session.execute(delete(ResearchGap).where(ResearchGap.session_id == session_id))
+        await self.session.commit()

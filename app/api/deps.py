@@ -25,6 +25,7 @@ from app.repositories.gap import GapRepository
 from app.services.gap_discovery import GapDiscoveryService
 from app.repositories.followup import FollowupQueryRepository
 from app.services.research_planner import ResearchPlannerV2
+from app.services.iterative_coordinator import IterativeResearchCoordinator
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -240,6 +241,48 @@ def get_research_planner_service() -> ResearchPlannerV2:
         api_url=settings.OLLAMA_API_URL,
         model_name=settings.LLM_MODEL
     )
+
+
+def get_iterative_research_coordinator(
+    llm_service=Depends(get_llm_service),
+    search_service=Depends(get_search_service),
+    scraper_service=Depends(get_scraper_service),
+    page_understanding_service=Depends(get_page_understanding_service),
+    knowledge_builder_service=Depends(get_knowledge_builder_service),
+    gap_discovery_service=Depends(get_gap_discovery_service),
+    research_planner_service=Depends(get_research_planner_service),
+    event_bus=Depends(get_event_bus),
+    session_repo=Depends(get_session_repository),
+    query_repo=Depends(get_query_repository),
+    search_result_repo=Depends(get_search_result_repository),
+    fetched_page_repo=Depends(get_fetched_page_repository),
+    page_knowledge_repo=Depends(get_page_knowledge_repository),
+    knowledge_repo=Depends(get_knowledge_repository),
+    gap_repo=Depends(get_gap_repository),
+    followup_repo=Depends(get_followup_query_repository),
+) -> IterativeResearchCoordinator:
+    """
+    Dependency injector for the IterativeResearchCoordinator orchestration service.
+    """
+    return IterativeResearchCoordinator(
+        llm_service=llm_service,
+        search_service=search_service,
+        scraper_service=scraper_service,
+        page_understanding_service=page_understanding_service,
+        knowledge_builder_service=knowledge_builder_service,
+        gap_discovery_service=gap_discovery_service,
+        research_planner_service=research_planner_service,
+        event_bus=event_bus,
+        session_repo=session_repo,
+        query_repo=query_repo,
+        search_result_repo=search_result_repo,
+        fetched_page_repo=fetched_page_repo,
+        page_knowledge_repo=page_knowledge_repo,
+        knowledge_repo=knowledge_repo,
+        gap_repo=gap_repo,
+        followup_repo=followup_repo,
+    )
+
 
 
 
