@@ -72,6 +72,11 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     # Ensure EventBus is available in app.state for tests
     if not hasattr(app.state, "event_bus"):
         app.state.event_bus = EventBus()
+
+    # Ensure TelemetryService is available in app.state for tests
+    if not hasattr(app.state, "telemetry_service"):
+        from app.services.telemetry import TelemetryService
+        app.state.telemetry_service = TelemetryService(session_maker=test_async_session_maker)
     
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"

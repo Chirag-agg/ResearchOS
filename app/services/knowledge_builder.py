@@ -8,6 +8,7 @@ from uuid import UUID
 
 from app.models.page_knowledge import PageKnowledge
 from app.models.knowledge import KnowledgeNode, KnowledgeEdge, RelationshipType
+from app.models.llm_metrics import LLMCallMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class KnowledgeBuilderService:
     def __init__(self, api_url: str, model_name: str):
         self.api_url = api_url.rstrip("/")
         self.model_name = model_name
+        self.last_llm_metrics: List[LLMCallMetrics] = []
 
     async def build_knowledge_graph(
         self, session_id: UUID, page_knowledges: List[PageKnowledge]
@@ -152,6 +154,17 @@ class KnowledgeBuilderService:
 
                     if not llm_response:
                         raise KnowledgeBuilderError("Ollama returned an empty response.")
+
+                    # Capture native Ollama metrics
+                    self.last_llm_metrics.append(
+                        LLMCallMetrics.from_ollama_response(
+                            data,
+                            model_name=self.model_name,
+                            stage="knowledge_building",
+                            prompt_chars=len(prompt),
+                            response_chars=len(llm_response),
+                        )
+                    )
 
                     try:
                         parsed_response = json.loads(llm_response)

@@ -13,6 +13,7 @@ from app.core.db import init_db, async_session_maker
 from app.api.v1.router import api_router
 from app.events.bus import EventBus
 from app.events.logger import EventLogger
+from app.services.telemetry import TelemetryService
 
 
 @asynccontextmanager
@@ -32,6 +33,9 @@ async def lifespan(app: FastAPI):
 
     # Store EventBus in app state for dependency injection
     app.state.event_bus = event_bus
+
+    # Initialize telemetry service
+    app.state.telemetry_service = TelemetryService(session_maker=async_session_maker)
 
     yield
 

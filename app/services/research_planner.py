@@ -8,6 +8,7 @@ from uuid import UUID
 from app.models.knowledge import KnowledgeNode, KnowledgeEdge
 from app.models.gap import ResearchGap
 from app.models.followup import FollowupQuery, FollowupPriority
+from app.models.llm_metrics import LLMCallMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class ResearchPlannerV2:
     def __init__(self, api_url: str, model_name: str):
         self.api_url = api_url.rstrip("/")
         self.model_name = model_name
+        self.last_llm_metrics: List[LLMCallMetrics] = []
 
     async def generate_followup_queries(
         self,
@@ -33,7 +35,8 @@ class ResearchPlannerV2:
         question: str,
         nodes: List[KnowledgeNode],
         edges: List[KnowledgeEdge],
-        gaps: List[ResearchGap]
+        gaps: List[ResearchGap],
+        adapted_instructions: str = None
     ) -> List[FollowupQuery]:
         """
         Generates concrete follow-up search queries targeting identified knowledge gaps.
@@ -67,6 +70,10 @@ class ResearchPlannerV2:
             )
         gaps_text = "\n".join(gaps_info) if gaps_info else "No gaps identified."
 
+        strategy_context = ""
+        if adapted_instructions:
+            strategy_context = f"Additional Adaptation Instructions:\n{adapted_instructions}\n\n"
+
         prompt = (
             "You are an expert search planner. You are given a research Question, a Knowledge Graph "
             "representing our current synthesized understanding (Concepts and Relationships), and a list of "
@@ -82,6 +89,7 @@ class ResearchPlannerV2:
             "Rules:\n"
             "- Focus only on generating queries that target the provided gaps and help answer the original Question.\n"
             "- Respond ONLY with a JSON object containing the \"followup_queries\" key.\n\n"
+            f"{strategy_context}"
             f"Research Question:\n{question}\n\n"
             f"Current Concepts/Nodes:\n{nodes_text}\n\n"
             f"Current Relationships/Edges:\n{edges_text}\n\n"
@@ -138,6 +146,17 @@ class ResearchPlannerV2:
 
                     if not llm_response:
                         raise ResearchPlannerError("Ollama returned an empty response.")
+
+                    # Capture native Ollama metrics
+                    self.last_llm_metrics.append(
+                        LLMCallMetrics.from_ollama_response(
+                            data,
+                            model_name=self.model_name,
+                            stage="planning",
+                            prompt_chars=len(prompt),
+                            response_chars=len(llm_response),
+                        )
+                    )
 
                     try:
                         parsed_response = json.loads(llm_response)

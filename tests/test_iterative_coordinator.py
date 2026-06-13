@@ -110,7 +110,7 @@ async def test_iterative_coordinator_stops_due_to_threshold(client, db_session: 
 
         mock_discover.side_effect = mock_discover_fn
 
-        def mock_plan_fn(session_id, question, nodes, edges, gaps):
+        def mock_plan_fn(session_id, question, nodes, edges, gaps, *args, **kwargs):
             for fq in mock_followups:
                 fq.session_id = session_id
             return mock_followups
@@ -226,7 +226,7 @@ async def test_iterative_coordinator_stops_due_to_max_rounds(client, db_session:
 
         mock_discover.side_effect = mock_discover_fn
 
-        def mock_plan_fn(session_id, question, nodes, edges, gaps):
+        def mock_plan_fn(session_id, question, nodes, edges, gaps, *args, **kwargs):
             for fq in mock_followups:
                 fq.session_id = session_id
             return mock_followups

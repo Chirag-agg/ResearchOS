@@ -26,6 +26,10 @@ from app.services.gap_discovery import GapDiscoveryService
 from app.repositories.followup import FollowupQueryRepository
 from app.services.research_planner import ResearchPlannerV2
 from app.services.iterative_coordinator import IterativeResearchCoordinator
+from app.repositories.strategy import StrategyRepository
+from app.services.strategy_learning import StrategyLearningEngine
+from app.services.telemetry import TelemetryService
+from app.core.db import async_session_maker as _telemetry_session_maker
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -159,6 +163,7 @@ def get_research_coordinator(
     """
     Dependency injector for the ResearchCoordinator orchestration service.
     """
+    telemetry = TelemetryService(session_maker=_telemetry_session_maker)
     return ResearchCoordinator(
         llm_service=llm_service,
         search_service=search_service,
@@ -172,6 +177,7 @@ def get_research_coordinator(
         fetched_page_repo=fetched_page_repo,
         claim_repo=claim_repo,
         validation_repo=validation_repo,
+        telemetry=telemetry,
     )
 
 
@@ -243,6 +249,23 @@ def get_research_planner_service() -> ResearchPlannerV2:
     )
 
 
+def get_strategy_repository(session: AsyncSession = Depends(get_db)) -> StrategyRepository:
+    """
+    Dependency injector that initializes and returns a StrategyRepository instance.
+    """
+    return StrategyRepository(session)
+
+
+def get_strategy_learning_engine() -> StrategyLearningEngine:
+    """
+    Dependency injector for the StrategyLearningEngine service.
+    """
+    return StrategyLearningEngine(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
+
 def get_iterative_research_coordinator(
     llm_service=Depends(get_llm_service),
     search_service=Depends(get_search_service),
@@ -260,10 +283,15 @@ def get_iterative_research_coordinator(
     knowledge_repo=Depends(get_knowledge_repository),
     gap_repo=Depends(get_gap_repository),
     followup_repo=Depends(get_followup_query_repository),
+    strategy_service=Depends(get_strategy_learning_engine),
+    strategy_repo=Depends(get_strategy_repository),
+    claim_repo=Depends(get_claim_repository),
+    validation_repo=Depends(get_validation_repository),
 ) -> IterativeResearchCoordinator:
     """
     Dependency injector for the IterativeResearchCoordinator orchestration service.
     """
+    telemetry = TelemetryService(session_maker=_telemetry_session_maker)
     return IterativeResearchCoordinator(
         llm_service=llm_service,
         search_service=search_service,
@@ -281,9 +309,11 @@ def get_iterative_research_coordinator(
         knowledge_repo=knowledge_repo,
         gap_repo=gap_repo,
         followup_repo=followup_repo,
+        strategy_service=strategy_service,
+        strategy_repo=strategy_repo,
+        claim_repo=claim_repo,
+        validation_repo=validation_repo,
+        telemetry=telemetry,
     )
-
-
-
 
 

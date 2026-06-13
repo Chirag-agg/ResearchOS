@@ -4,6 +4,8 @@ import asyncio
 import httpx
 from typing import List, Dict, Any, Tuple
 
+from app.models.llm_metrics import LLMCallMetrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,7 @@ class PageUnderstandingService:
     def __init__(self, api_url: str, model_name: str):
         self.api_url = api_url.rstrip("/")
         self.model_name = model_name
+        self.last_llm_metrics: List[LLMCallMetrics] = []
 
     def chunk_text(self, text: str, max_chunk_size: int = 4000, overlap: int = 300) -> List[str]:
         """
@@ -183,6 +186,17 @@ class PageUnderstandingService:
                     
                     if not llm_response:
                         raise PageUnderstandingError("Ollama returned an empty response.")
+                    
+                    # Capture native Ollama metrics
+                    self.last_llm_metrics.append(
+                        LLMCallMetrics.from_ollama_response(
+                            data,
+                            model_name=self.model_name,
+                            stage="page_analysis",
+                            prompt_chars=len(prompt),
+                            response_chars=len(llm_response),
+                        )
+                    )
                     
                     try:
                         parsed = json.loads(llm_response)

@@ -61,6 +61,9 @@ class EventType(str, Enum):
     RESEARCH_ROUND_COMPLETED = "research_round_completed"
     RESEARCH_STOPPED = "research_stopped"
 
+    STRATEGY_LEARNED = "strategy_learned"
+    STRATEGY_APPLIED = "strategy_applied"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 

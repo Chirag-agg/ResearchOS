@@ -14,6 +14,8 @@ from app.models.page_knowledge import PageKnowledge
 from app.models.knowledge import KnowledgeNode, KnowledgeEdge
 from app.models.gap import ResearchGap
 from app.models.followup import FollowupQuery
+from app.models.strategy import ResearchStrategyMemory
+from app.models.telemetry import TelemetryEvent
 
 # SQLite requires check_same_thread=False when sharing connections across threads (default FastAPI behavior)
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}

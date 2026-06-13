@@ -59,25 +59,17 @@ async def test_coordinator_successful_run(client, db_session: AsyncSession):
     )
 
     mock_candidates_1 = [
-        (
-            ClaimCandidate(
-                claim_text="Claim A from page 1",
-                evidence_snippet="Evidence snippet A from page 1",
-                confidence_score=0.8
-            ),
-            0,
-            "chunk_hash_p1_0"
+        ClaimCandidate(
+            claim_text="Claim A from page 1",
+            evidence_snippet="Evidence snippet A from page 1",
+            confidence_score=0.8
         )
     ]
     mock_candidates_2 = [
-        (
-            ClaimCandidate(
-                claim_text="Claim B from page 2",
-                evidence_snippet="Evidence snippet B from page 2",
-                confidence_score=0.7
-            ),
-            0,
-            "chunk_hash_p2_0"
+        ClaimCandidate(
+            claim_text="Claim B from page 2",
+            evidence_snippet="Evidence snippet B from page 2",
+            confidence_score=0.7
         )
     ]
 
@@ -86,7 +78,7 @@ async def test_coordinator_successful_run(client, db_session: AsyncSession):
          patch("app.services.scraper.ScraperService.start", new_callable=AsyncMock) as mock_scraper_start, \
          patch("app.services.scraper.ScraperService.stop", new_callable=AsyncMock) as mock_scraper_stop, \
          patch("app.services.scraper.ScraperService.fetch_and_extract", new_callable=AsyncMock) as mock_fetch, \
-         patch("app.services.claim_extractor.ClaimExtractor.extract_claims", new_callable=AsyncMock) as mock_extract, \
+         patch("app.services.claim_extractor.ClaimExtractor._extract_chunk_claims", new_callable=AsyncMock) as mock_extract, \
          patch("app.services.validator.ClaimValidator.validate_claim", new_callable=AsyncMock) as mock_validate, \
          patch.object(app.state.event_bus, "publish", wraps=app.state.event_bus.publish) as spy_publish:
 
@@ -235,7 +227,7 @@ async def test_coordinator_failed_extraction(client, db_session: AsyncSession):
          patch("app.services.scraper.ScraperService.start", new_callable=AsyncMock) as mock_scraper_start, \
          patch("app.services.scraper.ScraperService.stop", new_callable=AsyncMock) as mock_scraper_stop, \
          patch("app.services.scraper.ScraperService.fetch_and_extract", new_callable=AsyncMock) as mock_fetch, \
-         patch("app.services.claim_extractor.ClaimExtractor.extract_claims", new_callable=AsyncMock) as mock_extract, \
+         patch("app.services.claim_extractor.ClaimExtractor._extract_chunk_claims", new_callable=AsyncMock) as mock_extract, \
          patch.object(app.state.event_bus, "publish", wraps=app.state.event_bus.publish) as spy_publish:
 
         mock_llm_gen.return_value = ["query 1"]
@@ -270,7 +262,7 @@ async def test_coordinator_failed_validation(client, db_session: AsyncSession):
          patch("app.services.scraper.ScraperService.start", new_callable=AsyncMock) as mock_scraper_start, \
          patch("app.services.scraper.ScraperService.stop", new_callable=AsyncMock) as mock_scraper_stop, \
          patch("app.services.scraper.ScraperService.fetch_and_extract", new_callable=AsyncMock) as mock_fetch, \
-         patch("app.services.claim_extractor.ClaimExtractor.extract_claims", new_callable=AsyncMock) as mock_extract, \
+         patch("app.services.claim_extractor.ClaimExtractor._extract_chunk_claims", new_callable=AsyncMock) as mock_extract, \
          patch("app.services.validator.ClaimValidator.validate_claim", new_callable=AsyncMock) as mock_validate, \
          patch.object(app.state.event_bus, "publish", wraps=app.state.event_bus.publish) as spy_publish:
 
@@ -284,7 +276,7 @@ async def test_coordinator_failed_validation(client, db_session: AsyncSession):
             fetch_status="success", error_message=None, metadata_=None
         )
         mock_extract.return_value = [
-            (ClaimCandidate(claim_text="Claim Text", evidence_snippet="Evidence snippet text", confidence_score=0.9), 0, "ch1")
+            ClaimCandidate(claim_text="Claim Text", evidence_snippet="Evidence snippet text", confidence_score=0.9)
         ]
         mock_validate.side_effect = ClaimValidatorError("Validator timeout")
 
@@ -308,15 +300,13 @@ async def test_coordinator_ranking_logic(client, db_session: AsyncSession):
     mock_candidates = []
     for i in range(12):
         confidence = 0.5 + (i * 0.04) # 0.5 to 0.94
-        mock_candidates.append((
+        mock_candidates.append(
             ClaimCandidate(
                 claim_text=f"Claim {i:02d}", # Ensure correct length and zero-padding for assertions
                 evidence_snippet=f"Snippet {i:02d} supporting text",
                 confidence_score=confidence
-            ),
-            0,
-            f"chunk_hash_{i}"
-        ))
+            )
+        )
 
     # Mock validation scores
     # We make Claim 11 have low validation score (0.1) -> rank score = 0.1 * 0.94 = 0.094
@@ -342,7 +332,7 @@ async def test_coordinator_ranking_logic(client, db_session: AsyncSession):
          patch("app.services.scraper.ScraperService.start", new_callable=AsyncMock) as mock_scraper_start, \
          patch("app.services.scraper.ScraperService.stop", new_callable=AsyncMock) as mock_scraper_stop, \
          patch("app.services.scraper.ScraperService.fetch_and_extract", new_callable=AsyncMock) as mock_fetch, \
-         patch("app.services.claim_extractor.ClaimExtractor.extract_claims", new_callable=AsyncMock) as mock_extract, \
+         patch("app.services.claim_extractor.ClaimExtractor._extract_chunk_claims", new_callable=AsyncMock) as mock_extract, \
          patch("app.services.validator.ClaimValidator.validate_claim", new_callable=AsyncMock) as mock_validate:
 
         mock_llm_gen.return_value = ["query 1"]

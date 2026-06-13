@@ -8,3 +8,4 @@ httpx>=0.27.0
 aiosqlite>=0.20.0
 playwright>=1.44.0
 trafilatura>=1.10.0
+psutil>=5.9.0

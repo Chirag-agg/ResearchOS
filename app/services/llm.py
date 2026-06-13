@@ -3,6 +3,8 @@ import logging
 import httpx
 from typing import List
 
+from app.models.llm_metrics import LLMCallMetrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,7 @@ class LLMService:
     def __init__(self, api_url: str, model_name: str):
         self.api_url = api_url.rstrip("/")
         self.model_name = model_name
+        self.last_llm_metrics: List[LLMCallMetrics] = []
 
     async def check_health(self) -> bool:
         """
@@ -35,12 +38,16 @@ class LLMService:
             logger.warning(f"Ollama connection check failed at {self.api_url}: {e}")
             return False
 
-    async def generate_queries(self, question: str) -> List[str]:
+    async def generate_queries(self, question: str, adapted_instructions: str = None) -> List[str]:
         """
         Converts a research question into structured search queries using local Ollama.
         """
         if not question.strip():
             raise LLMError("Research question cannot be empty.")
+
+        strategy_context = ""
+        if adapted_instructions:
+            strategy_context = f"Additional Adaptation Instructions:\n{adapted_instructions}\n\n"
 
         prompt = (
             "You are a search query optimizer. Given the user's research question, generate exactly 5 distinct, "
@@ -55,6 +62,7 @@ class LLMService:
             "    \"vector database performance\"\n"
             "  ]\n"
             "}\n\n"
+            f"{strategy_context}"
             f"User Question: \"{question}\"\n\n"
             "JSON Output:\n"
         )
@@ -81,6 +89,17 @@ class LLMService:
                 
                 if not llm_response:
                     raise LLMError("Ollama returned an empty response.")
+                
+                # Capture native Ollama metrics
+                self.last_llm_metrics.append(
+                    LLMCallMetrics.from_ollama_response(
+                        data,
+                        model_name=self.model_name,
+                        stage="query_generation",
+                        prompt_chars=len(prompt),
+                        response_chars=len(llm_response),
+                    )
+                )
                 
                 logger.debug(f"Raw Ollama LLM response: {llm_response}")
                 
