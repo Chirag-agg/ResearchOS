@@ -52,6 +52,11 @@ class EventType(str, Enum):
     GAP_DISCOVERY_COMPLETED = "gap_discovery_completed"
     GAP_DISCOVERY_FAILED = "gap_discovery_failed"
 
+    FOLLOWUP_PLANNING_STARTED = "followup_planning_started"
+    FOLLOWUP_QUERY_GENERATED = "followup_query_generated"
+    FOLLOWUP_PLANNING_COMPLETED = "followup_planning_completed"
+    FOLLOWUP_PLANNING_FAILED = "followup_planning_failed"
+
     SESSION_COMPLETED = "session_completed"
     SESSION_FAILED = "session_failed"
 

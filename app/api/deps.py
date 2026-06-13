@@ -23,6 +23,8 @@ from app.repositories.knowledge import KnowledgeRepository
 from app.services.knowledge_builder import KnowledgeBuilderService
 from app.repositories.gap import GapRepository
 from app.services.gap_discovery import GapDiscoveryService
+from app.repositories.followup import FollowupQueryRepository
+from app.services.research_planner import ResearchPlannerV2
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -221,6 +223,24 @@ def get_gap_discovery_service() -> GapDiscoveryService:
         api_url=settings.OLLAMA_API_URL,
         model_name=settings.LLM_MODEL
     )
+
+
+def get_followup_query_repository(session: AsyncSession = Depends(get_db)) -> FollowupQueryRepository:
+    """
+    Dependency injector that initializes and returns a FollowupQueryRepository instance.
+    """
+    return FollowupQueryRepository(session)
+
+
+def get_research_planner_service() -> ResearchPlannerV2:
+    """
+    Dependency injector for the ResearchPlannerV2, initialized with core configuration.
+    """
+    return ResearchPlannerV2(
+        api_url=settings.OLLAMA_API_URL,
+        model_name=settings.LLM_MODEL
+    )
+
 
 
 
