@@ -179,6 +179,37 @@ async def test_claim_extractor_exhausts_retries():
         assert mock_post.call_count == 3
 
 
+async def test_claim_extractor_question_aware():
+    """
+    Tests that ClaimExtractor prompt includes the research question when provided.
+    """
+    mock_ollama_response = {
+        "model": "llama3",
+        "response": '{"claims": []}'
+    }
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_response = AsyncMock(spec=Response)
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_ollama_response
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        extractor = ClaimExtractor(api_url="http://localhost:11434", model_name="llama3")
+        page_content = "This is a sentence about vector databases."
+        question = "What are vector databases?"
+        
+        await extractor.extract_claims(page_content, "http://example.com", research_question=question)
+        
+        assert mock_post.call_count == 1
+        call_kwargs = mock_post.call_args[1]
+        assert "json" in call_kwargs
+        payload = call_kwargs["json"]
+        assert "prompt" in payload
+        assert "Research Question: What are vector databases?" in payload["prompt"]
+        assert "extract ONLY factual claims" in payload["prompt"]
+
+
 # --- Repository Tests ---
 
 async def test_claim_repository_methods(db_session: AsyncSession):

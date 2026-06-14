@@ -119,7 +119,7 @@ async def test_coordinator_successful_run(client, db_session: AsyncSession):
         ]
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
@@ -176,7 +176,7 @@ async def test_coordinator_failed_search(client, db_session: AsyncSession):
         mock_search_run.side_effect = SearchError("SearXNG offline")
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
@@ -207,7 +207,7 @@ async def test_coordinator_failed_fetch(client, db_session: AsyncSession):
         mock_fetch.side_effect = RuntimeError("Scraper crash")
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
@@ -242,7 +242,7 @@ async def test_coordinator_failed_extraction(client, db_session: AsyncSession):
         mock_extract.side_effect = ClaimExtractorError("Model crashed")
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
@@ -281,7 +281,7 @@ async def test_coordinator_failed_validation(client, db_session: AsyncSession):
         mock_validate.side_effect = ClaimValidatorError("Validator timeout")
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
@@ -348,7 +348,7 @@ async def test_coordinator_ranking_logic(client, db_session: AsyncSession):
         mock_validate.side_effect = validation_returns
 
         response = await client.post(
-            "/api/v1/research/run",
+            "/api/v1/research/run-basic",
             json={"question": "What is RAG?"}
         )
 
