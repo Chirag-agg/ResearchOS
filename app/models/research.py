@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 
 class ResearchQuestion(BaseModel):
@@ -11,6 +12,8 @@ class ResearchQuestion(BaseModel):
         description="The primary research question to plan queries for.",
         examples=["Best vector databases for RAG"]
     )
+    session_id: Optional[UUID] = None
+
 
 
 class ResearchQueries(BaseModel):

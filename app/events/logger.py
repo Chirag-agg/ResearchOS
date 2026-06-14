@@ -25,6 +25,13 @@ class EventLogger:
         Callback invoked by EventBus for every published event.
         Opens a fresh DB session, persists the event, and closes cleanly.
         """
+        if event.session_id is None:
+            logger.debug(
+                f"Skipping database persistence for event {event.event_type.value} "
+                "because it has no active session association."
+            )
+            return
+
         try:
             async with self._session_maker() as session:
                 repo = EventRepository(session)

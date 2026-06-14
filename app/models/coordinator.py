@@ -27,6 +27,8 @@ class IterativeResearchRequest(SQLModel):
     question: str
     max_rounds: Optional[int] = None
     confidence_threshold: Optional[float] = None
+    session_id: Optional[UUID] = None
+
 
 
 class IterativeResearchRoundMetrics(SQLModel):
