@@ -73,14 +73,20 @@ class ResearchCoordinator:
                 research_round=research_round,
             )
 
-    async def run_research(self, question: str) -> ResearchRunResult:
+    async def run_research(self, question: str, session_id = None) -> ResearchRunResult:
         """
         Executes the entire research pipeline for a given question.
         Returns a ResearchRunResult containing summary statistics and ranked top claims.
         """
-        # 1. Create Session
-        session = await self.session_repo.create_session(question=question)
-        session_id = session.id
+        # 1. Resolve Session
+        if session_id is None:
+            session = await self.session_repo.create_session(question=question)
+            session_id = session.id
+        else:
+            session = await self.session_repo.get_session(session_id)
+            if not session:
+                session = await self.session_repo.create_session(question=question)
+                session_id = session.id
 
         await self.event_bus.publish(
             EventType.SESSION_CREATED, session_id,
@@ -363,7 +369,7 @@ class ResearchCoordinator:
 
                         chunk_start = time.perf_counter()
                         candidates = await self.claim_extractor._extract_chunk_claims(
-                            chunk_text, chunk_index, page.url
+                            chunk_text, chunk_index, page.url, question
                         )
                         chunk_elapsed = (time.perf_counter() - chunk_start) * 1000
 

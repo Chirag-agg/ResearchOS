@@ -58,7 +58,7 @@ class ClaimExtractor:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     async def extract_claims(
-        self, page_content: str, source_url: str
+        self, page_content: str, source_url: str, research_question: str = None
     ) -> List[Tuple[ClaimCandidate, int, str]]:
         """
         Chunk text and extract factual claims from each chunk using Ollama.
@@ -78,43 +78,78 @@ class ClaimExtractor:
             chunk_hash = self.compute_hash(chunk_text)
             
             # Extract claims from this chunk
-            candidates = await self._extract_chunk_claims(chunk_text, chunk_index, source_url)
+            candidates = await self._extract_chunk_claims(chunk_text, chunk_index, source_url, research_question)
             for candidate in candidates:
                 all_candidates.append((candidate, chunk_index, chunk_hash))
 
         return all_candidates
 
-    async def _extract_chunk_claims(self, chunk_text: str, chunk_index: int, source_url: str) -> List[ClaimCandidate]:
+    async def _extract_chunk_claims(self, chunk_text: str, chunk_index: int, source_url: str, research_question: str = None) -> List[ClaimCandidate]:
         """
         Execute Ollama request for a single chunk of text with retries.
         """
-        prompt = (
-            "You are an expert information extraction assistant. Your task is to extract factual claims from the provided text.\n\n"
-            "For each claim, you must extract:\n"
-            "1. \"claim_text\": A clear, concise statement of the factual claim.\n"
-            "2. \"evidence_snippet\": The exact sentence or substring from the text that supports this claim. This MUST be copied verbatim from the text.\n"
-            "3. \"confidence_score\": A float value between 0.0 and 1.0 representing your confidence in this claim extraction.\n\n"
-            "Rules:\n"
-            "- Extract factual claims only.\n"
-            "- Do NOT summarize the text.\n"
-            "- Do NOT include opinions, interpretations, or speculations.\n"
-            "- Do NOT infer facts not explicitly present in the text.\n"
-            "- The evidence snippet MUST be an exact verbatim substring from the source text.\n\n"
-            "Respond ONLY with a JSON object containing a list of claims under the key \"claims\". "
-            "Do NOT include markdown formatting, backticks, or any conversational text.\n\n"
-            "Example output format:\n"
-            "{\n"
-            "  \"claims\": [\n"
-            "    {\n"
-            "      \"claim_text\": \"Vector databases store embeddings for fast similarity search.\",\n"
-            "      \"evidence_snippet\": \"Vector databases are designed to store and query high-dimensional vector embeddings, enabling fast similarity search.\",\n"
-            "      \"confidence_score\": 0.95\n"
-            "    }\n"
-            "  ]\n"
-            "}\n\n"
-            f"Source Text:\n{chunk_text}\n\n"
-            "JSON Output:\n"
-        )
+        if research_question:
+            prompt = (
+                f"You are an expert information extraction assistant. Research Question: {research_question}\n\n"
+                "Your task is to extract ONLY factual claims from the provided text that help answer the research question above.\n\n"
+                "Rules:\n"
+                "- Prefer novel, recent, technical findings.\n"
+                "- Ignore generic background information everyone already knows.\n"
+                "- Ignore historical facts that don't represent recent advancements.\n"
+                "- Focus on specific results, benchmarks, methods, and discoveries.\n"
+                "- For each claim, you must extract:\n"
+                "  1. \"claim_text\": A clear, concise statement of the factual claim.\n"
+                "  2. \"evidence_snippet\": The exact sentence or substring from the text that supports this claim. This MUST be copied verbatim from the text.\n"
+                "  3. \"confidence_score\": A float value between 0.0 and 1.0 representing your confidence in this claim extraction.\n\n"
+                "Rules:\n"
+                "- Extract factual claims only.\n"
+                "- Do NOT summarize the text.\n"
+                "- Do NOT include opinions, interpretations, or speculations.\n"
+                "- Do NOT infer facts not explicitly present in the text.\n"
+                "- The evidence snippet MUST be an exact verbatim substring from the source text.\n\n"
+                "Respond ONLY with a JSON object containing a list of claims under the key \"claims\". "
+                "Do NOT include markdown formatting, backticks, or any conversational text.\n\n"
+                "Example output format:\n"
+                "{\n"
+                "  \"claims\": [\n"
+                "    {\n"
+                "      \"claim_text\": \"Vector databases store embeddings for fast similarity search.\",\n"
+                "      \"evidence_snippet\": \"Vector databases are designed to store and query high-dimensional vector embeddings, enabling fast similarity search.\",\n"
+                "      \"confidence_score\": 0.95\n"
+                "    }\n"
+                "  ]\n"
+                "}\n\n"
+                f"Source Text:\n{chunk_text}\n\n"
+                "JSON Output:\n"
+            )
+        else:
+            prompt = (
+                "You are an expert information extraction assistant. Your task is to extract factual claims from the provided text.\n\n"
+                "For each claim, you must extract:\n"
+                "1. \"claim_text\": A clear, concise statement of the factual claim.\n"
+                "2. \"evidence_snippet\": The exact sentence or substring from the text that supports this claim. This MUST be copied verbatim from the text.\n"
+                "3. \"confidence_score\": A float value between 0.0 and 1.0 representing your confidence in this claim extraction.\n\n"
+                "Rules:\n"
+                "- Extract factual claims only.\n"
+                "- Do NOT summarize the text.\n"
+                "- Do NOT include opinions, interpretations, or speculations.\n"
+                "- Do NOT infer facts not explicitly present in the text.\n"
+                "- The evidence snippet MUST be an exact verbatim substring from the source text.\n\n"
+                "Respond ONLY with a JSON object containing a list of claims under the key \"claims\". "
+                "Do NOT include markdown formatting, backticks, or any conversational text.\n\n"
+                "Example output format:\n"
+                "{\n"
+                "  \"claims\": [\n"
+                "    {\n"
+                "      \"claim_text\": \"Vector databases store embeddings for fast similarity search.\",\n"
+                "      \"evidence_snippet\": \"Vector databases are designed to store and query high-dimensional vector embeddings, enabling fast similarity search.\",\n"
+                "      \"confidence_score\": 0.95\n"
+                "    }\n"
+                "  ]\n"
+                "}\n\n"
+                f"Source Text:\n{chunk_text}\n\n"
+                "JSON Output:\n"
+            )
 
         # Enforce structured JSON schema to guarantee key existence
         schema = {

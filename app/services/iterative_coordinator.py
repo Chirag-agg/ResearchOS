@@ -96,7 +96,8 @@ class IterativeResearchCoordinator:
         self,
         question: str,
         max_rounds: int = None,
-        confidence_threshold: float = None
+        confidence_threshold: float = None,
+        session_id = None
     ) -> IterativeResearchRunResult:
         """
         Runs the iterative research loop for the given question.
@@ -107,9 +108,15 @@ class IterativeResearchCoordinator:
         if confidence_threshold is None:
             confidence_threshold = settings.CONFIDENCE_THRESHOLD
 
-        # 1. Create Session
-        session = await self.session_repo.create_session(question=question)
-        session_id = session.id
+        # 1. Resolve Session
+        if session_id is None:
+            session = await self.session_repo.create_session(question=question)
+            session_id = session.id
+        else:
+            session = await self.session_repo.get_session(session_id)
+            if not session:
+                session = await self.session_repo.create_session(question=question)
+                session_id = session.id
 
         await self.event_bus.publish(
             EventType.SESSION_CREATED, session_id,
@@ -138,7 +145,8 @@ class IterativeResearchCoordinator:
                 adaptation = await self.strategy_service.consult_and_adapt(
                     question=question,
                     strategy_repo=self.strategy_repo,
-                    event_bus=self.event_bus
+                    event_bus=self.event_bus,
+                    session_id=session_id
                 )
                 adapted_instructions = adaptation.get("adapted_instructions")
                 await self._flush_llm_metrics(
@@ -191,11 +199,11 @@ class IterativeResearchCoordinator:
                 else:
                     # In subsequent rounds, get followup queries planned in the previous round
                     round_followups = await self.followup_repo.get_by_session(session_id)
-                    if not followup_queries:
+                    if not round_followups:
                         logger.info("No followup queries generated in previous round. Stopping.")
                         stopped_reason = "no_more_queries"
                         break
-                    current_queries = [fq.query for fq in followup_queries]
+                    current_queries = [fq.query for fq in round_followups]
 
                 if not current_queries:
                     logger.info("No queries to search in this round. Stopping.")

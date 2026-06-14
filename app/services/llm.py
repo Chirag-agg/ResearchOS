@@ -139,3 +139,29 @@ class LLMService:
         except Exception as e:
             logger.error(f"Unexpected error in LLMService: {e}")
             raise LLMError(f"Query generation failed: {e}")
+
+    async def generate_response(self, prompt: str, format_json: bool = False) -> str:
+        """
+        Generates a text or JSON response from local Ollama for any prompt.
+        """
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+        }
+        if format_json:
+            payload["format"] = "json"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_url}/api/generate",
+                    json=payload,
+                    timeout=60.0
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data.get("response", "").strip()
+        except Exception as e:
+            logger.error(f"Ollama call failed: {e}")
+            raise LLMError(f"Ollama call failed: {e}")
+

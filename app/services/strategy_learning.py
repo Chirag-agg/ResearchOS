@@ -236,7 +236,8 @@ class StrategyLearningEngine:
         self,
         question: str,
         strategy_repo,
-        event_bus
+        event_bus,
+        session_id = None
     ) -> Dict[str, Any]:
         """
         Consults past memories to return adaptation instructions for future search queries.
@@ -278,7 +279,7 @@ class StrategyLearningEngine:
         # Publish Event
         await event_bus.publish(
             EventType.STRATEGY_APPLIED,
-            session_id=None,
+            session_id=session_id,
             payload={
                 "question_type": question_type,
                 "memories_consulted": len(memories),
