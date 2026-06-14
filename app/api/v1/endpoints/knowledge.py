@@ -177,3 +177,51 @@ async def build_session_knowledge(
             status_code=status_code,
             detail=f"An error occurred during knowledge base building: {e}"
         )
+
+
+@router.get(
+    "/research/{session_id}/knowledge",
+    response_model=KnowledgeBuildResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get the synthesized Knowledge Graph for a session"
+)
+async def get_session_knowledge(
+    session_id: str,
+    knowledge_repo = Depends(get_knowledge_repository),
+) -> KnowledgeBuildResponse:
+    try:
+        from uuid import UUID
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+
+    nodes = await knowledge_repo.get_nodes_by_session(session_uuid)
+    edges = await knowledge_repo.get_edges_by_session(session_uuid)
+
+    response_nodes = [
+        NodeRead(
+            id=n.id,
+            session_id=n.session_id,
+            concept=n.concept,
+            description=n.description,
+            confidence=n.confidence,
+            source_count=n.source_count,
+            created_at=n.created_at,
+        )
+        for n in nodes
+    ]
+
+    response_edges = [
+        EdgeRead(
+            id=e.id,
+            session_id=e.session_id,
+            source_node=e.source_node,
+            target_node=e.target_node,
+            relationship=e.relationship,
+            created_at=e.created_at,
+        )
+        for e in edges
+    ]
+
+    return KnowledgeBuildResponse(nodes=response_nodes, edges=response_edges)
+

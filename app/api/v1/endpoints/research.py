@@ -1,9 +1,10 @@
 import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, List
 from app.core.config import settings
 from app.models.research import ResearchQuestion, ResearchQueries
-from app.models.coordinator import ResearchRunResult
+from app.models.coordinator import ResearchRunResult, IterativeResearchRequest, IterativeResearchRunResult
 from app.models.session import SessionStatus
 from app.models.search import SearchRequest, SearchResponse, SearchResultRead, SearchResult
 from app.models.fetched_page import (
@@ -28,8 +29,12 @@ from app.api.deps import (
     get_fetched_page_repository,
     get_event_bus,
     get_research_coordinator,
+    get_iterative_research_coordinator,
 )
 from app.services.coordinator import ResearchCoordinator, CoordinatorError
+from app.services.iterative_coordinator import IterativeResearchCoordinator, IterativeCoordinatorError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -374,19 +379,57 @@ async def execute_research_fetch(
 
 @router.post(
     "/research/run",
-    response_model=ResearchRunResult,
+    response_model=IterativeResearchRunResult,
     status_code=status.HTTP_200_OK,
-    summary="Run the full research pipeline orchestrator"
+    summary="Run the full iterative research pipeline"
 )
 async def run_research_pipeline(
+    payload: IterativeResearchRequest,
+    coordinator: IterativeResearchCoordinator = Depends(get_iterative_research_coordinator),
+) -> IterativeResearchRunResult:
+    """
+    Triggers and orchestrates the multi-round iterative research pipeline.
+    Repeatedly searches, fetches pages, builds knowledge graphs, discovers gaps,
+    and refines queries until confidence threshold is met or max rounds reached.
+    """
+    try:
+        result = await coordinator.run_iterative_research(
+            question=payload.question,
+            max_rounds=payload.max_rounds,
+            confidence_threshold=payload.confidence_threshold,
+            session_id=payload.session_id,
+        )
+        return result
+    except IterativeCoordinatorError as e:
+        logger.error(f"Iterative research pipeline failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in research pipeline: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during research execution: {e}"
+        )
+
+
+@router.post(
+    "/research/run-basic",
+    response_model=ResearchRunResult,
+    status_code=status.HTTP_200_OK,
+    summary="Run the basic single-pass research pipeline (legacy)"
+)
+async def run_basic_research_pipeline(
     payload: ResearchQuestion,
     coordinator: ResearchCoordinator = Depends(get_research_coordinator),
 ) -> ResearchRunResult:
     """
-    Triggers and orchestrates the complete end-to-end research pipeline.
+    Triggers the legacy single-pass research pipeline: search, fetch, extract claims, validate.
+    For the full iterative pipeline with knowledge graphs and gap discovery, use /research/run.
     """
     try:
-        result = await coordinator.run_research(payload.question)
+        result = await coordinator.run_research(payload.question, session_id=payload.session_id)
         return result
     except CoordinatorError as e:
         raise HTTPException(
@@ -396,5 +439,162 @@ async def run_research_pipeline(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred during research execution: {e}"
+            detail=f"An unexpected error occurred during basic research execution: {e}"
         )
+
+
+from fastapi.responses import PlainTextResponse
+
+@router.post(
+    "/api/generate-architecture",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Generate production architecture plan"
+)
+async def generate_architecture(
+    payload: dict,
+    llm_service: LLMService = Depends(get_llm_service)
+) -> dict:
+    import json
+    system_name = payload.get("system_name", "Deep Research Agent")
+    system_description = payload.get("system_description", "")
+    recommended_solution = payload.get("recommended_solution", "")
+    constraints = payload.get("constraints", {})
+    
+    prompt = (
+        f"You are a principal systems architect. Generate a production-ready systems architecture plan for: {system_name}.\n"
+        f"Description: {system_description}\n"
+        f"Recommended Solution Context: {recommended_solution}\n"
+        f"Constraints: {json.dumps(constraints)}\n\n"
+        "Respond ONLY with a JSON object. Do not include markdown code block wrapper, backticks, or any conversational text.\n"
+        "The JSON object must match this schema exactly:\n"
+        "{\n"
+        "  \"metadata\": {\n"
+        "    \"system_name\": \"string\",\n"
+        "    \"dau\": 10000,\n"
+        "    \"compliance_requirements\": [\"string\"]\n"
+        "  },\n"
+        "  \"executive_summary\": \"string\",\n"
+        "  \"system_diagram\": {\n"
+        "    \"format\": \"mermaid\",\n"
+        "    \"diagram\": \"mermaid syntax string here describing components and arrows\"\n"
+        "  },\n"
+        "  \"components\": [\n"
+        "    {\n"
+        "      \"name\": \"string\",\n"
+        "      \"purpose\": \"string\",\n"
+        "      \"technology\": \"string\",\n"
+        "      \"sla\": {\"latency\": \"string\"}\n"
+        "    }\n"
+        "  ],\n"
+        "  \"technology_stack\": [\n"
+        "    {\n"
+        "      \"component\": \"string\",\n"
+        "      \"technology\": \"string\",\n"
+        "      \"reasoning\": \"string\",\n"
+        "      \"pros\": [\"string\"],\n"
+        "      \"cons\": [\"string\"],\n"
+        "      \"cost_monthly_usd\": 100\n"
+        "    }\n"
+        "  ],\n"
+        "  \"cost_model\": {\n"
+        "    \"total_monthly_cost\": {\n"
+        "      \"total_usd\": 1000,\n"
+        "      \"llm_cost_usd\": 800,\n"
+        "      \"infrastructure_cost_usd\": 200\n"
+        "    }\n"
+        "  },\n"
+        "  \"risk_mitigation\": [\n"
+        "    {\n"
+        "      \"risk\": \"string\",\n"
+        "      \"probability\": \"Low|Medium|High\",\n"
+        "      \"impact\": \"Low|Medium|High\",\n"
+        "      \"mitigation\": [\"string\"],\n"
+        "      \"rto\": \"string\"\n"
+        "    }\n"
+        "  ],\n"
+        "  \"deployment_architecture\": {},\n"
+        "  \"scalability_strategy\": {},\n"
+        "  \"observability_plan\": {},\n"
+        "  \"security_compliance\": {},\n"
+        "  \"future_evolution\": {}\n"
+        "}"
+    )
+    try:
+        response_text = await llm_service.generate_response(prompt, format_json=True)
+        return json.loads(response_text)
+    except Exception as e:
+        logger.error(f"Failed to generate architecture: {e}")
+        return {
+            "metadata": {"system_name": system_name, "dau": constraints.get("daily_active_users", 10000), "compliance_requirements": constraints.get("compliance_requirements", [])},
+            "executive_summary": f"Failed to generate custom architecture plan due to: {e}. Returning placeholder.",
+            "system_diagram": {"format": "mermaid", "diagram": "graph TD\n  Client --> App\n  App --> DB"},
+            "components": [],
+            "technology_stack": [],
+            "cost_model": {"total_monthly_cost": {"total_usd": 0, "llm_cost_usd": 0, "infrastructure_cost_usd": 0}},
+            "risk_mitigation": [],
+            "deployment_architecture": {},
+            "scalability_strategy": {},
+            "observability_plan": {},
+            "security_compliance": {},
+            "future_evolution": {}
+        }
+
+@router.post(
+    "/api/generate-deployment-runbook",
+    response_class=PlainTextResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate deployment runbook in markdown"
+)
+async def generate_deployment_runbook(
+    payload: dict,
+    llm_service: LLMService = Depends(get_llm_service)
+) -> str:
+    import json
+    architecture = payload.get("architecture", {})
+    target_cloud = payload.get("target_cloud", "AWS")
+    
+    prompt = (
+        f"You are a DevOps engineer. Generate a comprehensive deployment runbook for the following architecture on {target_cloud}:\n"
+        f"Architecture details: {json.dumps(architecture)}\n\n"
+        "Output ONLY a markdown document with step-by-step instructions, code snippets, config files, and troubleshooting tips."
+    )
+    try:
+        response_text = await llm_service.generate_response(prompt)
+        return response_text
+    except Exception as e:
+        logger.error(f"Failed to generate runbook: {e}")
+        return f"# Deployment Runbook for {target_cloud}\n\nFailed to generate: {e}"
+
+@router.get(
+    "/research/{session_id}/sources",
+    response_model=List[FetchedPageRead],
+    status_code=status.HTTP_200_OK,
+    summary="Get all fetched pages/sources for a session"
+)
+async def get_session_sources(
+    session_id: str,
+    fetched_page_repo: FetchedPageRepository = Depends(get_fetched_page_repository),
+) -> List[FetchedPageRead]:
+    try:
+        from uuid import UUID
+        session_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+        
+    pages = await fetched_page_repo.get_by_session(session_uuid)
+    return [
+        FetchedPageRead(
+            url=fp.url,
+            canonical_url=fp.canonical_url,
+            title=fp.title,
+            content_preview=fp.content[:500] if fp.content else "",
+            content_hash=fp.content_hash,
+            content_length=fp.content_length,
+            extraction_quality_score=fp.extraction_quality_score,
+            fetch_status=fp.fetch_status,
+            error_message=fp.error_message,
+        )
+        for fp in pages
+    ]
+

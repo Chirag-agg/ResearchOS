@@ -94,7 +94,7 @@ async def extract_session_claims(
 
         for page, sr in successful_pages:
             source_domain = urlparse(page.url).netloc
-            candidates = await claim_extractor.extract_claims(page.content, page.url)
+            candidates = await claim_extractor.extract_claims(page.content, page.url, session.question)
 
             # 6. Build ExtractedClaim objects and deduplicate by claim_hash
             for candidate, chunk_index, chunk_hash in candidates:
