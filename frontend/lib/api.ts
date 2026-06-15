@@ -63,7 +63,7 @@ export async function createResearch(
 
   try {
     const response = await fetch(
-      `${getApiBaseUrl()}/api/v1/research/run-iterative`,
+      `${getApiBaseUrl()}/api/v1/research/run-iterative/start`,
       {
         method: "POST",
         headers: {
@@ -92,7 +92,9 @@ export async function createResearch(
       !data ||
       typeof data !== "object" ||
       !("session_id" in data) ||
-      typeof data.session_id !== "string"
+      typeof data.session_id !== "string" ||
+      !("status" in data) ||
+      typeof data.status !== "string"
     ) {
       throw new ApiError(
         "The server returned an unexpected response format.",

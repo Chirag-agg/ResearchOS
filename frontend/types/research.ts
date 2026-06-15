@@ -28,12 +28,7 @@ export interface IterativeResearchRoundMetrics {
 export interface CreateResearchResponse {
   session_id: string;
   question: string;
-  rounds_executed: number;
-  final_coverage_score: number;
-  final_confidence_score: number;
-  total_concepts: number;
-  stopped_reason: string;
-  round_metrics: IterativeResearchRoundMetrics[];
+  status: string;
 }
 
 export interface ResearchFormState {
