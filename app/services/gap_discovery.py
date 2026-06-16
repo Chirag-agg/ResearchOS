@@ -33,7 +33,8 @@ class GapDiscoveryService:
         session_id: UUID,
         question: str,
         nodes: List[KnowledgeNode],
-        edges: List[KnowledgeEdge]
+        edges: List[KnowledgeEdge],
+        validated_claims: List[Any] = None
     ) -> Dict[str, Any]:
         """
         Analyses the research question against existing knowledge nodes and edges
@@ -50,6 +51,21 @@ class GapDiscoveryService:
             )
         nodes_text = "\n".join(nodes_info) if nodes_info else "No concepts found."
 
+        # Compile validated claims text
+        claims_text = ""
+        if validated_claims:
+            claims_info = []
+            for i, claim in enumerate(validated_claims):
+                # Only include SUPPORTED and WEAK_SUPPORT claims (UNSUPPORTED are filtered out earlier)
+                claims_info.append(
+                    f"- Claim: {claim.claim_text}\n"
+                    f"  Evidence: {claim.evidence_snippet}\n"
+                    f"  Extraction Confidence: {claim.confidence_score}\n"
+                    f"  Validation Status: {claim.validation_status}\n"
+                    f"  Support Score: {claim.support_score}"
+                )
+            claims_text = "\n".join(claims_info) if claims_info else "No validated claims found."
+
         # Build mapping of node ID to concept name for edge formatting
         node_id_to_concept = {node.id: node.concept for node in nodes}
 
@@ -61,15 +77,15 @@ class GapDiscoveryService:
         edges_text = "\n".join(edges_info) if edges_info else "No relationships found."
 
         prompt = (
-            "You are an expert research analyst. You are given a research Question and a Knowledge Graph "
+            "You are an expert research analyst. You are given a research Question, a Knowledge Graph "
             "representing our current synthesized understanding of the topic (a list of Concepts/Nodes and "
-            "Relationships/Edges).\n\n"
+            "Relationships/Edges), and validated factual claims extracted from research sources.\n\n"
             "Your task is to identify missing knowledge areas (research gaps) relative to the original research Question. "
             "Do NOT propose new search actions. Only evaluate what we know and what critical aspects of the Question "
             "are left unanswered or require further exploration.\n\n"
             "Produce a single JSON object containing three keys:\n"
             "1. \"known_topics\": A list of strings representing the main topics or concepts that are well-covered "
-            "   by our current knowledge base.\n"
+            "   by our current knowledge base and validated claims.\n"
             "2. \"missing_topics\": A list of objects representing the missing or under-explored knowledge areas relative to the Question. "
             "   Each object must have:\n"
             "     - \"topic\": The name of the missing topic (keep it concise, e.g., \"Performance evaluation on GPU cluster\").\n"
@@ -78,11 +94,13 @@ class GapDiscoveryService:
             "3. \"confidence\": A float value between 0.0 and 1.0 representing your overall confidence in this gap analysis.\n\n"
             "Rules:\n"
             "- Focus ONLY on gaps that are relevant to answering the original Question.\n"
-            "- Rely on the provided concepts and relationships to assess coverage.\n"
+            "- Rely on the provided concepts, relationships, and validated claims to assess coverage.\n"
+            "- When assessing what is well-covered, consider both the knowledge graph and the validated claims.\n"
             "- Respond ONLY with a JSON object containing the specified keys.\n\n"
             f"Research Question:\n{question}\n\n"
             f"Current Concepts/Nodes:\n{nodes_text}\n\n"
             f"Current Relationships/Edges:\n{edges_text}\n\n"
+            f"Validated Claims:\n{claims_text}\n\n"
             "JSON Output:\n"
         )
 

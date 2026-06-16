@@ -94,7 +94,7 @@ async def test_iterative_coordinator_stops_due_to_threshold(client, db_session: 
         mock_fetch.return_value = pc
         mock_understand.return_value = mock_understanding_res
 
-        def mock_build_fn(session_id, all_page_knowledges):
+        def mock_build_fn(session_id, all_page_knowledges, validated_claims=None):
             for n in mock_nodes:
                 n.session_id = session_id
             for e in mock_edges:
@@ -103,7 +103,7 @@ async def test_iterative_coordinator_stops_due_to_threshold(client, db_session: 
 
         mock_build.side_effect = mock_build_fn
 
-        def mock_discover_fn(session_id, question, nodes, edges):
+        def mock_discover_fn(session_id, question, nodes, edges, validated_claims=None):
             for g in mock_discovery_res["gaps"]:
                 g.session_id = session_id
             return mock_discovery_res
@@ -197,7 +197,7 @@ async def test_iterative_coordinator_stops_due_to_max_rounds(client, db_session:
 
         # Stateful side effects to correctly bind session_id and execute sequentially
         build_call_count = 0
-        def mock_build_fn(session_id, all_page_knowledges):
+        def mock_build_fn(session_id, all_page_knowledges, validated_claims=None):
             nonlocal build_call_count
             if build_call_count == 0:
                 build_call_count += 1
@@ -212,7 +212,7 @@ async def test_iterative_coordinator_stops_due_to_max_rounds(client, db_session:
         mock_build.side_effect = mock_build_fn
 
         discover_call_count = 0
-        def mock_discover_fn(session_id, question, nodes, edges):
+        def mock_discover_fn(session_id, question, nodes, edges, validated_claims=None):
             nonlocal discover_call_count
             if discover_call_count == 0:
                 discover_call_count += 1
