@@ -287,6 +287,8 @@ def get_iterative_research_coordinator(
     strategy_repo=Depends(get_strategy_repository),
     claim_repo=Depends(get_claim_repository),
     validation_repo=Depends(get_validation_repository),
+    claim_extractor=Depends(get_claim_extractor),
+    claim_validator=Depends(get_claim_validator),
 ) -> IterativeResearchCoordinator:
     """
     Dependency injector for the IterativeResearchCoordinator orchestration service.
@@ -309,6 +311,8 @@ def get_iterative_research_coordinator(
         knowledge_repo=knowledge_repo,
         gap_repo=gap_repo,
         followup_repo=followup_repo,
+        claim_extractor=claim_extractor,
+        claim_validator=claim_validator,
         strategy_service=strategy_service,
         strategy_repo=strategy_repo,
         claim_repo=claim_repo,
