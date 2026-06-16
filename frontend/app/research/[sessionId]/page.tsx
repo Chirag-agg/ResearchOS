@@ -1,4 +1,4 @@
-import { LiveResearchMonitor } from "@/components/research/LiveResearchMonitor";
+import { ResearchWorkspace } from "@/components/research/ResearchWorkspace";
 import { GradientBackground } from "@/components/layout/GradientBackground";
 
 interface SessionPageProps {
@@ -12,8 +12,8 @@ export default async function SessionPage({ params }: SessionPageProps) {
 
   return (
     <GradientBackground>
-      <main className="mx-auto flex min-h-screen w-full flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-        <LiveResearchMonitor sessionId={sessionId} />
+      <main className="mx-auto flex min-h-screen w-full flex-col items-center px-4 py-12 sm:px-6 lg:px-8">
+        <ResearchWorkspace sessionId={sessionId} />
       </main>
     </GradientBackground>
   );
