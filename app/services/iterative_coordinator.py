@@ -15,6 +15,8 @@ from app.models.coordinator import (
     IterativeResearchRunResult,
 )
 from app.models.telemetry import TelemetryStage, TelemetryEventType
+from app.services.claim_extractor import ClaimExtractor
+from app.services.claim_validator import ClaimValidator
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,8 @@ class IterativeResearchCoordinator:
         knowledge_repo,
         gap_repo,
         followup_repo,
+        claim_extractor,
+        claim_validator,
         strategy_service=None,
         strategy_repo=None,
         claim_repo=None,
@@ -72,11 +76,14 @@ class IterativeResearchCoordinator:
         self.knowledge_repo = knowledge_repo
         self.gap_repo = gap_repo
         self.followup_repo = followup_repo
+        self.claim_extractor = claim_extractor
+        self.claim_validator = claim_validator
         self.strategy_service = strategy_service
         self.strategy_repo = strategy_repo
         self.claim_repo = claim_repo
         self.validation_repo = validation_repo
         self.telemetry = telemetry
+        self.accumulated_validated_claims = []
 
     async def _flush_llm_metrics(self, service, session_id, stage, research_round=None):
         """Drain last_llm_metrics from a service and record each via telemetry."""
@@ -137,6 +144,9 @@ class IterativeResearchCoordinator:
                 session_id, TelemetryStage.SESSION,
                 message=f"Iterative research started: {question}"
             )
+
+        # Reset accumulated validated claims for this research run
+        self.accumulated_validated_claims = []
 
         # Consult strategy memory to adapt search
         adapted_instructions = None
@@ -386,6 +396,102 @@ class IterativeResearchCoordinator:
                 ]
                 successful_pages = successful_pages[:settings.MAX_CLAIM_EXTRACTION_PAGES]
 
+                # Step 3.5: Extract and Validate Claims
+                t_claim_extract = None
+                t_claim_validate = None
+                if self.telemetry:
+                    t_claim_extract = await self.telemetry.track_start(
+                        session_id, TelemetryStage.FETCH,
+                        message=f"Round {round_idx}: extracting claims from {len(successful_pages)} pages",
+                        research_round=round_idx,
+                    )
+                # We'll do claim extraction and validation in one go to avoid multiple loops.
+
+                # We'll collect:
+                all_extracted_claims = []  # each element: (ClaimCandidate, chunk_index, chunk_hash, page)
+                claim_extraction_errors = 0
+                for page_idx, page in enumerate(successful_pages):
+                    try:
+                        page_claims = await self.claim_extractor.extract_claims(
+                            page_content=page.content,
+                            source_url=page.url,
+                            research_question=question
+                        )
+                        for claim_candidate, chunk_index, chunk_hash in page_claims:
+                            all_extracted_claims.append((claim_candidate, chunk_index, chunk_hash, page))
+                    except Exception as e:
+                        logger.warning(f"Claim extraction failed for page {page.url}: {e}")
+                        claim_extraction_errors += 1
+
+                if self.telemetry and t_claim_extract:
+                    await self.telemetry.track_end(
+                        session_id, TelemetryStage.FETCH, t_claim_extract,
+                        message=f"Round {round_idx}: extracted {len(all_extracted_claims)} raw claims",
+                        research_round=round_idx,
+                    )
+
+                # Now validate each extracted claim
+                validated_claims = []  # list of ValidatedClaim
+                claims_extracted = len(all_extracted_claims)
+                claims_supported = 0
+                claims_weak_support = 0
+                claims_rejected = 0
+                validation_start = time.perf_counter()
+                for claim_candidate, chunk_index, chunk_hash, page in all_extracted_claims:
+                    try:
+                        validation_result = await self.claim_validator.validate_claim(
+                            claim_text=claim_candidate.claim_text,
+                            evidence_snippet=claim_candidate.evidence_snippet
+                        )
+                        support_score = validation_result["support_score"]
+                        validation_status = validation_result["validation_status"]
+                        reason = validation_result["reason"]
+
+                        if validation_status == "UNSUPPORTED":
+                            claims_rejected += 1
+                            continue  # skip unsupported claims
+                        elif validation_status == "WEAK_SUPPORT":
+                            claims_weak_support += 1
+                        elif validation_status == "SUPPORTED":
+                            claims_supported += 1
+
+                        # Create a ValidatedClaim instance
+                        validated_claim = ValidatedClaim(
+                            claim_text=claim_candidate.claim_text,
+                            evidence_snippet=claim_candidate.evidence_snippet,
+                            confidence_score=claim_candidate.confidence_score,
+                            support_score=support_score,
+                            validation_status=validation_status,
+                            reason=reason,
+                            page_id=page.id,
+                            chunk_index=chunk_index,
+                            chunk_hash=chunk_hash
+                        )
+                        validated_claims.append(validated_claim)
+                    except Exception as e:
+                        logger.warning(f"Claim validation failed for claim {claim_candidate.claim_text[:50]}: {e}")
+                        claims_rejected += 1  # treat validation failures as rejected
+
+                validation_elapsed = (time.perf_counter() - validation_start) * 1000
+
+                if self.telemetry:
+                    await self.telemetry.track_metric(
+                        session_id, TelemetryStage.SESSION,
+                        message=f"Round {round_idx}: claims extracted={claims_extracted}, supported={claims_supported}, weak_support={claims_weak_support}, rejected={claims_rejected}",
+                        research_round=round_idx,
+                        metadata={
+                            "claims_extracted": claims_extracted,
+                            "claims_supported": claims_supported,
+                            "claims_weak_support": claims_weak_support,
+                            "claims_rejected": claims_rejected,
+                            "validation_duration_ms": round(validation_elapsed, 2)
+                        }
+                    )
+
+                # Reset accumulated validated claims for this research run (if not already reset)
+                # We reset it at the beginning of the run, so we just extend it here.
+                self.accumulated_validated_claims.extend(validated_claims)
+
                 # Step 4: Analyze Pages (PageKnowledge)
                 t_analysis = None
                 if self.telemetry:
@@ -467,7 +573,7 @@ class IterativeResearchCoordinator:
                 all_page_knowledges = await self.page_knowledge_repo.get_by_session(session_id)
                 try:
                     nodes_list, edges_list = await self.knowledge_builder_service.build_knowledge_graph(
-                        session_id, all_page_knowledges
+                        session_id, all_page_knowledges, self.accumulated_validated_claims
                     )
                 except Exception as e:
                     if self.telemetry and t_kb:
@@ -505,7 +611,8 @@ class IterativeResearchCoordinator:
                         session_id=session_id,
                         question=question,
                         nodes=persisted_nodes,
-                        edges=persisted_edges
+                        edges=persisted_edges,
+                        validated_claims=self.accumulated_validated_claims
                     )
                 except Exception as e:
                     if self.telemetry and t_gap:

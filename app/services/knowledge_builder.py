@@ -30,7 +30,7 @@ class KnowledgeBuilderService:
         self.last_llm_metrics: List[LLMCallMetrics] = []
 
     async def build_knowledge_graph(
-        self, session_id: UUID, page_knowledges: List[PageKnowledge]
+        self, session_id: UUID, page_knowledges: List[PageKnowledge], validated_claims: List[Any] = None
     ) -> Tuple[List[KnowledgeNode], List[KnowledgeEdge]]:
         """
         Synthesizes PageKnowledge objects into a unified set of KnowledgeNodes and KnowledgeEdges.
@@ -63,11 +63,28 @@ class KnowledgeBuilderService:
                 f"Entities: {', '.join(entity_list)}\n"
             )
 
+        # Add validated claims to the compilation for knowledge building
+        if validated_claims:
+            claim_compilation = []
+            for i, claim in enumerate(validated_claims):
+                # Only include SUPPORTED and WEAK_SUPPORT claims (UNSUPPORTED are filtered out earlier)
+                claim_compilation.append(
+                    f"--- Validated Claim {i+1} ---\n"
+                    f"Claim: {claim.claim_text}\n"
+                    f"Evidence: {claim.evidence_snippet}\n"
+                    f"Extraction Confidence: {claim.confidence_score}\n"
+                    f"Validation Status: {claim.validation_status}\n"
+                    f"Support Score: {claim.support_score}\n"
+                )
+            if claim_compilation:
+                compilation.append("\n--- Validated Claims from Sources ---\n")
+                compilation.extend(claim_compilation)
+
         compilation_text = "\n".join(compilation)
 
         prompt = (
             "You are an expert knowledge engineer. You are given a compilation of page-level structured knowledge "
-            "extracted from several research sources. Synthesize these records into a single, cohesive, unified "
+            "and validated factual claims extracted from several research sources. Synthesize these records into a single, cohesive, unified "
             "Knowledge Graph (a list of core concepts as nodes, and relationships between them as directed edges).\n\n"
             "Produce a single JSON object containing two lists:\n"
             "1. \"nodes\": A list of distinct, key concepts or entities in the research topic.\n"
@@ -84,8 +101,9 @@ class KnowledgeBuilderService:
             "Rules:\n"
             "- Concept names in the edges (\"source_concept\", \"target_concept\") MUST match the concept names in the \"nodes\" list EXACTLY.\n"
             "- Only construct relationships for which there is support or connection in the provided texts.\n"
+            "- When evaluating confidence and source_count for concepts, consider both the page-level knowledge and the validated claims.\n"
             "- Respond ONLY with a JSON object containing the \"nodes\" and \"edges\" keys.\n\n"
-            f"Source Page Extractions:\n{compilation_text}\n\n"
+            f"Source Page Extractions and Validated Claims:\n{compilation_text}\n\n"
             "JSON Output:\n"
         )
 
