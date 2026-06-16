@@ -5,6 +5,11 @@ import type {
   TelemetryEventRead,
   ResearchMetrics,
 } from "@/types/research";
+import type {
+  KnowledgeGraphResponse,
+  ResearchSourcesResponse,
+} from "@/types/workspace";
+import type { ReasoningResponse } from "@/types/reasoning";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -187,4 +192,58 @@ export async function getResearchMetrics(
   }
 
   return (await parseJsonResponse(response)) as ResearchMetrics;
+}
+
+export async function getResearchSources(
+  sessionId: string
+): Promise<ResearchSourcesResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/research/${sessionId}/sources`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const data = await parseJsonResponse(response).catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(data, `Failed to fetch sources (${response.status})`),
+      response.status
+    );
+  }
+
+  return (await parseJsonResponse(response)) as ResearchSourcesResponse;
+}
+
+export async function getResearchKnowledge(
+  sessionId: string
+): Promise<KnowledgeGraphResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/research/${sessionId}/knowledge`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const data = await parseJsonResponse(response).catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(data, `Failed to fetch knowledge graph (${response.status})`),
+      response.status
+    );
+  }
+
+  return (await parseJsonResponse(response)) as KnowledgeGraphResponse;
+}
+
+export async function getResearchReasoning(
+  sessionId: string
+): Promise<ReasoningResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/research/${sessionId}/reasoning`, {
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const data = await parseJsonResponse(response).catch(() => null);
+    throw new ApiError(
+      extractErrorMessage(data, `Failed to fetch reasoning trail (${response.status})`),
+      response.status
+    );
+  }
+
+  return (await parseJsonResponse(response)) as ReasoningResponse;
 }
