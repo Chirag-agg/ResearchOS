@@ -57,3 +57,12 @@ class IterativeResearchRunResult(SQLModel):
     total_concepts: int
     stopped_reason: str  # "threshold_reached", "max_rounds_reached", "failed"
     round_metrics: List[IterativeResearchRoundMetrics]
+
+
+class IterativeResearchLaunchResponse(SQLModel):
+    """
+    Response DTO returned when the iterative pipeline is launched in the background.
+    """
+    session_id: UUID
+    question: str
+    status: str = "running"
