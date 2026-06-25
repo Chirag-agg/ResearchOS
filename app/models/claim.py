@@ -1,91 +1,70 @@
-from datetime import datetime
 from uuid import UUID, uuid4
-from typing import List, Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field as PydanticField
-from sqlmodel import SQLModel, Field
-from app.models.base import get_utc_now
+from sqlmodel import SQLModel, Field, Relationship
+from app.models.base import ProvenanceMixin
 
+from enum import Enum
+
+class ClaimPredicate(str, Enum):
+    USES = "USES"
+    TRAINS_ON = "TRAINS_ON"
+    OUTPERFORMS = "OUTPERFORMS"
+    IS_LIMITED_BY = "IS_LIMITED_BY"
+    EVALUATED_ON = "EVALUATED_ON"
+    INTRODUCES = "INTRODUCES"
+    ACHIEVES = "ACHIEVES"
+    REQUIRES = "REQUIRES"
+    CAUSES = "CAUSES"
+    CONTRADICTS = "CONTRADICTS"
+    SUPPORTS = "SUPPORTS"
 
 class ClaimCandidate(BaseModel):
     """
     Internal validation schema for a single extracted claim candidate from LLM response.
     Used for validation and transformation before database persistence.
     """
-    claim_text: str = PydanticField(..., min_length=5, description="Factual claim text")
+    subject: str = PydanticField(..., description="The subject entity text")
+    predicate: str = PydanticField(..., description="The predicate, must be one of ClaimPredicate enum")
+    object: str = PydanticField(..., description="The object entity text")
+    
     evidence_snippet: str = PydanticField(..., min_length=5, description="Verbatim snippet from source text supporting this claim")
-    confidence_score: float = PydanticField(..., ge=0.0, le=1.0, description="LLM confidence score")
+    predicate_confidence: float = PydanticField(..., ge=0.0, le=1.0, description="LLM confidence score for the predicate relationship")
 
-
-class ExtractedClaim(SQLModel, table=True):
-    """
-    SQLModel representing a stored factual claim extracted from a fetched page.
-    Includes chunk metadata, hash for deduplication, and query tracking.
-    """
-    __tablename__ = "extracted_claims"
-
-    id: UUID = Field(
-        default_factory=uuid4,
-        primary_key=True,
-        index=True,
-        nullable=False
-    )
-    page_id: UUID = Field(
-        foreign_key="fetched_pages.id",
-        index=True,
-        nullable=False
-    )
-    session_id: UUID = Field(
-        foreign_key="research_sessions.id",
-        index=True,
-        nullable=False
-    )
-    query_id: UUID = Field(
-        foreign_key="generated_queries.id",
-        index=True,
-        nullable=False
-    )
-    claim_text: str = Field(nullable=False)
-    claim_hash: str = Field(nullable=False, index=True)
-    evidence_snippet: str = Field(nullable=False)
-    confidence_score: float = Field(nullable=False)
-    source_url: str = Field(nullable=False)
-    source_domain: str = Field(nullable=False, index=True)
-    source_chunk_index: int = Field(nullable=False)
-    source_chunk_hash: str = Field(nullable=False)
-    created_at: datetime = Field(
-        default_factory=get_utc_now,
-        nullable=False
-    )
-
-
-class ClaimExtractRequest(SQLModel):
-    """
-    Request DTO payload to trigger claim extraction for a session.
-    """
-    session_id: UUID
-
-
-class ClaimRead(SQLModel):
-    """
-    Response DTO containing properties of an extracted claim.
-    """
+class ClaimRead(BaseModel):
     id: UUID
+    session_id: UUID
+    subject_entity_id: UUID
+    predicate: str
+    object_entity_id: UUID
+    overall_confidence: float
+
+class ClaimsResponse(BaseModel):
+    claims: List[ClaimRead]
+
+class ClaimExtractRequest(BaseModel):
     page_id: UUID
     session_id: UUID
-    query_id: UUID
-    claim_text: str
-    claim_hash: str
-    evidence_snippet: str
-    confidence_score: float
-    source_url: str
-    source_domain: str
-    source_chunk_index: int
-    source_chunk_hash: str
-    created_at: datetime
 
-
-class ClaimsResponse(SQLModel):
+class Claim(ProvenanceMixin, table=True):
     """
-    Response DTO containing the list of extracted claims.
+    Relational assertion constructed from Observations.
+    Modeled as RDF triples (subject -> predicate -> object).
     """
-    claims: List[ClaimRead]
+    __tablename__ = "claims"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    stable_hash: str = Field(nullable=False, index=True, unique=True, description="SHA256 of subject_id + predicate + object_id")
+    session_id: UUID = Field(foreign_key="research_sessions.id", ondelete="CASCADE", index=True)
+    
+    subject_entity_id: UUID = Field(foreign_key="entities.id", index=True)
+    predicate: str = Field(nullable=False, index=True)
+    object_entity_id: UUID = Field(foreign_key="entities.id", index=True)
+    
+    entity_confidence: float = Field(default=1.0)
+    grounding_confidence: float = Field(default=1.0)
+    predicate_confidence: float = Field(default=1.0)
+    overall_confidence: float = Field(default=1.0)
+    
+    # Relationships
+    # evidence: List["Evidence"] = Relationship(back_populates="claim") 
+    # (Leaving relationship comments for documentation, actual SQLModel wiring might need careful forward refs)

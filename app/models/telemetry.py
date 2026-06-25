@@ -47,6 +47,15 @@ class TelemetryEventType(str, Enum):
     # Chunk lifecycle events
     CHUNK_PROCESSING_STARTED = "chunk_processing_started"
     CHUNK_PROCESSING_COMPLETED = "chunk_processing_completed"
+    
+    # Coordinator events
+    RESEARCH_PLAN_GENERATED = "RESEARCH_PLAN_GENERATED"
+    RESEARCH_PLAN_COVERAGE = "RESEARCH_PLAN_COVERAGE"
+    
+    # Retrieval Pipeline events
+    PIPELINE_GATHER = "PIPELINE_GATHER"
+    PIPELINE_DEDUP = "PIPELINE_DEDUP"
+    PIPELINE_RANK = "PIPELINE_RANK"
 
     # LLM call events
     LLM_CALL_STARTED = "llm_call_started"
