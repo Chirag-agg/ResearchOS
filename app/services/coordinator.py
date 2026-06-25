@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.models.session import SessionStatus
 from app.models.event import EventType
 from app.models.fetched_page import FetchedPage
-from app.models.claim import ExtractedClaim, ClaimRead
+from app.models.claim import Claim, ClaimRead
 from app.models.validation import ClaimValidation, ValidationStatus
 from app.models.coordinator import ResearchRunResult
 from app.models.telemetry import TelemetryStage, TelemetryEventType
@@ -392,7 +392,7 @@ class ResearchCoordinator:
                                 continue
                             seen_hashes.add(claim_hash)
 
-                            extracted_claim = ExtractedClaim(
+                            extracted_claim = Claim(
                                 page_id=page.id,
                                 session_id=session_id,
                                 query_id=sr.query_id,

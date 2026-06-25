@@ -17,6 +17,19 @@ from app.models.coordinator import (
 from app.models.telemetry import TelemetryStage, TelemetryEventType
 from app.services.claim_extractor import ClaimExtractor
 from app.services.claim_validator import ClaimValidator
+from dataclasses import dataclass
+
+@dataclass
+class ValidatedClaim:
+    claim_text: str
+    evidence_snippet: str
+    confidence_score: float
+    support_score: float
+    validation_status: str
+    reason: str
+    page_id: UUID
+    chunk_index: int
+    chunk_hash: str
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +50,7 @@ class IterativeResearchCoordinator:
     def __init__(
         self,
         llm_service,
-        search_service,
-        scraper_service,
+        retrieval_pipeline,
         page_understanding_service,
         knowledge_builder_service,
         gap_discovery_service,
@@ -61,8 +73,7 @@ class IterativeResearchCoordinator:
         telemetry=None,
     ):
         self.llm_service = llm_service
-        self.search_service = search_service
-        self.scraper_service = scraper_service
+        self.retrieval_pipeline = retrieval_pipeline
         self.page_understanding_service = page_understanding_service
         self.knowledge_builder_service = knowledge_builder_service
         self.gap_discovery_service = gap_discovery_service
@@ -147,6 +158,8 @@ class IterativeResearchCoordinator:
 
         # Reset accumulated validated claims for this research run
         self.accumulated_validated_claims = []
+        # Track candidate pools for evaluation purposes
+        self.pipeline_pools = []
 
         # Consult strategy memory to adapt search
         adapted_instructions = None
@@ -198,9 +211,40 @@ class IterativeResearchCoordinator:
                 if round_idx == 0:
                     try:
                         if adapted_instructions:
-                            current_queries = await self.llm_service.generate_queries(question, adapted_instructions=adapted_instructions)
+                            research_plan = await self.llm_service.plan_queries(question, adapted_instructions=adapted_instructions)
                         else:
-                            current_queries = await self.llm_service.generate_queries(question)
+                            research_plan = await self.llm_service.plan_queries(question)
+                        
+                        current_queries = research_plan.queries
+                        
+                        if self.telemetry and t_qgen:
+                            # 1B.5 Planner Telemetry
+                            await self.telemetry.track_url_event(
+                                session_id, "RESEARCH_PLAN_GENERATED", "plan",
+                                message=f"Intents: {len(research_plan.intents)} | Entities: {len(research_plan.entities)} | Confidence: {research_plan.confidence:.2f}",
+                                metadata={
+                                    "intents": [i.value for i in research_plan.intents],
+                                    "entities": research_plan.entities,
+                                    "timeframe": research_plan.timeframe,
+                                    "confidence": research_plan.confidence,
+                                    "generated_queries_count": len(current_queries)
+                                }
+                            )
+                            
+                            # 1B.5 Intent/Entity Coverage (basic heuristic: do the queries mention the entities?)
+                            # A real evaluator would use LLM, but we log the raw ratio here
+                            covered_entities = sum(
+                                1 for e in research_plan.entities 
+                                if any(e.lower() in q.lower() for q in current_queries)
+                            )
+                            entity_coverage = covered_entities / len(research_plan.entities) if research_plan.entities else 1.0
+                            
+                            await self.telemetry.track_url_event(
+                                session_id, "RESEARCH_PLAN_COVERAGE", "coverage",
+                                message=f"Entity Coverage: {entity_coverage:.0%}",
+                                metadata={"entity_coverage": entity_coverage}
+                            )
+                            
                     except Exception as e:
                         if self.telemetry and t_qgen:
                             await self.telemetry.track_failed(session_id, TelemetryStage.QUERY_GENERATION, t_qgen, str(e), research_round=round_idx)
@@ -240,163 +284,107 @@ class IterativeResearchCoordinator:
                     q_rec = await self.query_repo.create_query(session_id=session_id, query_text=query_text)
                     query_records.append(q_rec)
 
-                # Step 2: Search
+                # --- Phase 1A: Replaced Manual Search + Fetch Loop with RetrievalPipeline ---
+                # The pipeline handles gathering candidates from connectors, dedup, and fetching.
                 t_search = None
                 if self.telemetry:
                     t_search = await self.telemetry.track_start(
                         session_id, TelemetryStage.SEARCH,
-                        message=f"Round {round_idx}: searching {len(query_records)} queries",
+                        message=f"Round {round_idx}: executing retrieval pipeline for {len(query_records)} queries",
                         research_round=round_idx,
                     )
-
-                all_results = []
-                try:
-                    for q_rec in query_records:
-                        q_start = time.perf_counter()
-                        raw_results = await self.search_service.search(query=q_rec.query_text)
-                        q_elapsed = (time.perf_counter() - q_start) * 1000
-
-                        for r in raw_results:
-                            r.query_id = q_rec.id
-                            all_results.append(r)
-
-                        if self.telemetry:
-                            await self.telemetry.track_query_processing(
-                                session_id=session_id,
-                                query=q_rec.query_text,
-                                search_engine="searxng",
-                                results_count=len(raw_results),
-                                duration_ms=round(q_elapsed, 2),
-                                query_id=str(q_rec.id),
-                                research_round=round_idx,
-                            )
-                except Exception as e:
-                    if self.telemetry and t_search:
-                        await self.telemetry.track_failed(session_id, TelemetryStage.SEARCH, t_search, str(e), research_round=round_idx)
-                    raise IterativeCoordinatorError(f"Search step failed in round {round_idx}: {e}")
-
-                # Deduplicate results by URL
-                unique_results_map = {}
-                for r in all_results:
-                    url = r.url
-                    if url not in unique_results_map or r.score > unique_results_map[url].score:
-                        unique_results_map[url] = r
-                deduplicated_results = list(unique_results_map.values())
-
-                # Persist search results
-                await self.search_result_repo.create_many(deduplicated_results)
-
+                    
+                pipeline_result = await self.retrieval_pipeline.retrieve_and_fetch(
+                    current_queries, 
+                    rank_k=50,
+                    fetch_k=settings.MAX_CONCURRENT_FETCHES,
+                    session_id=session_id,
+                    telemetry=self.telemetry
+                )
+                self.pipeline_pools.append(pipeline_result.pool)
+                deduplicated_results = pipeline_result.candidates
+                
+                # We need to map Candidates back to SearchResult models to save in DB for provenance
+                search_results_db = []
+                # Simple mapping based on generated_query matching
+                query_text_to_id = {q.query_text: q.id for q in query_records}
+                for c in deduplicated_results:
+                    from app.models.search import SearchResult
+                    sr = SearchResult(
+                        query_id=query_text_to_id.get(c.generated_query, query_records[0].id),
+                        title=c.title,
+                        url=c.url,
+                        snippet=c.snippet,
+                        engine=c.source,
+                        score=c.final_score
+                    )
+                    search_results_db.append(sr)
+                    
+                await self.search_result_repo.create_many(search_results_db)
+                
+                fetched_pages = pipeline_result.fetched_pages
+                
                 if self.telemetry and t_search:
                     await self.telemetry.track_end(
                         session_id, TelemetryStage.SEARCH, t_search,
-                        message=f"Round {round_idx}: {len(deduplicated_results)} unique results",
+                        message=f"Round {round_idx}: fetched {len(fetched_pages)} pages from {len(deduplicated_results)} candidates",
                         research_round=round_idx,
                     )
-
-                # Step 3: Fetch Pages
-                t_fetch = None
-                if self.telemetry:
-                    t_fetch = await self.telemetry.track_start(
-                        session_id, TelemetryStage.FETCH,
-                        message=f"Round {round_idx}: fetching {len(deduplicated_results)} pages",
-                        research_round=round_idx,
-                    )
-                    for sr in deduplicated_results:
-                        await self.telemetry.track_url_event(
-                            session_id, TelemetryEventType.URL_QUEUED, sr.url,
-                            message=f"Queued: {sr.url}",
-                            research_round=round_idx,
-                        )
-
-                await self.scraper_service.start()
-                try:
-                    semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_FETCHES)
-                    completed_count = 0
-                    failed_count = 0
-
-                    async def _bounded_fetch(url: str):
-                        nonlocal completed_count, failed_count
-                        if self.telemetry:
-                            await self.telemetry.track_url_event(
-                                session_id, TelemetryEventType.URL_FETCH_STARTED, url,
-                                message=f"Fetching: {url}",
-                                research_round=round_idx,
-                            )
-
-                        fetch_start = time.perf_counter()
-                        async with semaphore:
-                            result = await self.scraper_service.fetch_and_extract(url)
-                        fetch_elapsed = (time.perf_counter() - fetch_start) * 1000
-
-                        if self.telemetry:
-                            await self.telemetry.track_url_event(
-                                session_id, TelemetryEventType.URL_FETCH_COMPLETED, url,
-                                message=f"Fetched: {url} ({result.content_length} chars, {result.fetch_status})",
-                                duration_ms=round(fetch_elapsed, 2),
-                                research_round=round_idx,
-                                metadata={
-                                    "fetch_status": result.fetch_status,
-                                    "content_length": result.content_length,
-                                }
-                            )
-                            if result.fetch_status == "success":
-                                completed_count += 1
-                            else:
-                                failed_count += 1
-                            total = len(deduplicated_results)
-                            done = completed_count + failed_count
-                            await self.telemetry.track_queue_metrics(
-                                session_id, queued=total, active=total - done,
-                                completed=completed_count, failed=failed_count,
-                                research_round=round_idx,
-                            )
-
-                        return result
-
-                    tasks = [_bounded_fetch(sr.url) for sr in deduplicated_results]
-                    page_contents = await asyncio.gather(*tasks)
-                except Exception as e:
-                    if self.telemetry and t_fetch:
-                        await self.telemetry.track_failed(session_id, TelemetryStage.FETCH, t_fetch, str(e), research_round=round_idx)
-                    raise IterativeCoordinatorError(f"Fetching pages failed in round {round_idx}: {e}")
-                finally:
-                    await self.scraper_service.stop()
-
+                
                 # Build and persist FetchedPage records
-                fetched_pages = []
-                for sr, pc in zip(deduplicated_results, page_contents):
-                    fetched_page = FetchedPage(
-                        search_result_id=sr.id,
-                        url=pc.url,
-                        canonical_url=pc.canonical_url,
-                        title=pc.title,
-                        content=pc.content,
-                        content_hash=pc.content_hash,
-                        content_length=pc.content_length,
-                        raw_html_path=pc.raw_html_path,
-                        extraction_quality_score=pc.extraction_quality_score,
-                        fetch_status=pc.fetch_status,
-                        error_message=pc.error_message,
-                        metadata_=pc.metadata_,
-                    )
-                    fetched_pages.append(fetched_page)
+                import json
+                fetched_pages_db = []
+                for idx, (c, fp) in enumerate(zip(deduplicated_results, fetched_pages)):
+                    # Link to the SearchResult we just persisted
+                    sr_id = None
+                    for sr in search_results_db:
+                        if sr.url == c.url:
+                            sr_id = sr.id
+                            break
+                    fp.session_id = session_id
+                    fp.search_result_id = sr_id
+                    
+                    # Store provenance in metadata
+                    provenance_metadata = {
+                        "connector": c.connector,
+                        "source": c.source,
+                        "generated_query": c.generated_query,
+                        "candidate_rank": idx + 1,
+                        "scores": c.scores,
+                        "final_score": c.final_score
+                    }
+                    if fp.metadata_:
+                        try:
+                            existing_meta = json.loads(fp.metadata_)
+                            existing_meta.update(provenance_metadata)
+                            fp.metadata_ = json.dumps(existing_meta)
+                        except:
+                            fp.metadata_ = json.dumps(provenance_metadata)
+                    else:
+                        fp.metadata_ = json.dumps(provenance_metadata)
+                        
+                    fetched_pages_db.append(fp)
 
-                await self.fetched_page_repo.create_many(fetched_pages)
-
-                if self.telemetry and t_fetch:
-                    successful = sum(1 for fp in fetched_pages if fp.fetch_status == "success")
-                    await self.telemetry.track_end(
-                        session_id, TelemetryStage.FETCH, t_fetch,
-                        message=f"Round {round_idx}: {successful}/{len(fetched_pages)} pages fetched",
-                        research_round=round_idx,
-                    )
+                await self.fetched_page_repo.create_many(fetched_pages_db)
+                
+                await self.event_bus.publish(
+                    EventType.FETCH_COMPLETED,
+                    session_id=session_id,
+                    payload={"fetched_count": len(fetched_pages_db)}
+                )
 
                 successful_pages = [
-                    fp for fp in fetched_pages if fp.fetch_status == "success"
+                    fp for fp in fetched_pages_db if fp.fetch_status == "success"
                 ]
                 successful_pages = successful_pages[:settings.MAX_CLAIM_EXTRACTION_PAGES]
 
                 # Step 3.5: Extract and Validate Claims
+                await self.event_bus.publish(
+                    EventType.CLAIM_EXTRACTION_STARTED,
+                    session_id=session_id,
+                    payload={"page_count": len(successful_pages)}
+                )
+                
                 t_claim_extract = None
                 t_claim_validate = None
                 if self.telemetry:
@@ -491,6 +479,17 @@ class IterativeResearchCoordinator:
                 # Reset accumulated validated claims for this research run (if not already reset)
                 # We reset it at the beginning of the run, so we just extend it here.
                 self.accumulated_validated_claims.extend(validated_claims)
+                
+                await self.event_bus.publish(
+                    EventType.CLAIM_EXTRACTION_COMPLETED,
+                    session_id=session_id,
+                    payload={
+                        "claims_extracted": claims_extracted,
+                        "claims_supported": claims_supported,
+                        "claims_weak_support": claims_weak_support,
+                        "claims_rejected": claims_rejected
+                    }
+                )
 
                 # Step 4: Analyze Pages (PageKnowledge)
                 t_analysis = None
@@ -553,6 +552,12 @@ class IterativeResearchCoordinator:
                     raise IterativeCoordinatorError(f"Page analysis failed in round {round_idx}: {e}")
 
                 await self.page_knowledge_repo.create_many(round_knowledges)
+                
+                await self.event_bus.publish(
+                    EventType.PAGE_ANALYSIS_COMPLETED,
+                    session_id=session_id,
+                    payload={"pages_analyzed": len(round_knowledges)}
+                )
 
                 if self.telemetry and t_analysis:
                     await self.telemetry.track_end(
