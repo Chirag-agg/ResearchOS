@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from app.models.validation import ClaimValidation
-from app.models.claim import ExtractedClaim
+from app.models.claim import Claim
 
 
 class ValidationRepository:
