@@ -27,8 +27,9 @@ from app.services.knowledge_builder import KnowledgeBuilderService
 from app.services.llm import LLMService
 from app.services.page_understanding import PageUnderstandingService
 from app.services.research_planner import ResearchPlannerV2
+from app.services.retrieval_pipeline import RetrievalPipeline
+from app.services.connectors.searxng import SearXNGConnector
 from app.services.scraper import ScraperService
-from app.services.search import SearchService
 from app.services.strategy_learning import StrategyLearningEngine
 from app.services.claim_extractor import ClaimExtractor
 from app.services.claim_validator import ClaimValidator
@@ -40,13 +41,17 @@ router = APIRouter()
 
 
 def _build_service_kwargs() -> dict:
+    scraper = ScraperService(
+        timeout_ms=settings.PLAYWRIGHT_TIMEOUT_MS,
+        html_storage_dir=settings.HTML_STORAGE_DIR,
+    )
+    retrieval_pipeline = RetrievalPipeline(
+        connectors=[SearXNGConnector(api_url=settings.SEARXNG_URL)],
+        scraper=scraper
+    )
     return {
         "llm_service": LLMService(api_url=settings.OLLAMA_API_URL, model_name=settings.LLM_MODEL),
-        "search_service": SearchService(api_url=settings.SEARXNG_URL),
-        "scraper_service": ScraperService(
-            timeout_ms=settings.PLAYWRIGHT_TIMEOUT_MS,
-            html_storage_dir=settings.HTML_STORAGE_DIR,
-        ),
+        "retrieval_pipeline": retrieval_pipeline,
         "page_understanding_service": PageUnderstandingService(
             api_url=settings.OLLAMA_API_URL,
             model_name=settings.LLM_MODEL,

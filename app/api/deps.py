@@ -4,8 +4,12 @@ from app.core.db import async_session_maker
 from app.core.config import settings
 from fastapi import Depends, Request
 from app.services.llm import LLMService
-from app.services.search import SearchService
+from app.services.connectors.searxng import SearXNGConnector
+from app.services.connectors.arxiv import ArxivConnector
+from app.services.connectors.semantic_scholar import SemanticScholarConnector
+from app.services.retrieval_pipeline import RetrievalPipeline
 from app.services.scraper import ScraperService
+from app.services.search import SearchService
 from app.repositories.session import SessionRepository
 from app.repositories.query import QueryRepository
 from app.repositories.search_result import SearchResultRepository
@@ -13,13 +17,20 @@ from app.repositories.fetched_page import FetchedPageRepository
 from app.repositories.event import EventRepository
 from app.events.bus import EventBus
 from app.services.claim_extractor import ClaimExtractor
+from app.services.validator import ClaimValidator
 from app.repositories.claim import ClaimRepository
 from app.repositories.validation import ValidationRepository
-from app.services.validator import ClaimValidator
 from app.services.coordinator import ResearchCoordinator
 from app.repositories.page_knowledge import PageKnowledgeRepository
-from app.services.page_understanding import PageUnderstandingService
 from app.repositories.knowledge import KnowledgeRepository
+from app.services.page_understanding import PageUnderstandingService
+from app.services.scraper import ScraperService
+
+def get_scraper_service() -> ScraperService:
+    return ScraperService()
+
+def get_search_service() -> SearchService:
+    return SearchService(api_url=settings.SEARXNG_URL)
 from app.services.knowledge_builder import KnowledgeBuilderService
 from app.repositories.gap import GapRepository
 from app.services.gap_discovery import GapDiscoveryService
@@ -58,11 +69,17 @@ def get_session_repository(session: AsyncSession = Depends(get_db)) -> SessionRe
     return SessionRepository(session)
 
 
-def get_search_service() -> SearchService:
+def get_retrieval_pipeline(scraper_service: ScraperService = Depends(get_scraper_service)) -> RetrievalPipeline:
     """
-    Dependency injector for the SearchService, initialized with SearXNG URL.
+    Dependency injector for the RetrievalPipeline, initialized with connectors and scraper.
     """
-    return SearchService(api_url=settings.SEARXNG_URL)
+    searxng = SearXNGConnector(api_url=settings.SEARXNG_URL)
+    arxiv = ArxivConnector()
+    scholar = SemanticScholarConnector()
+    return RetrievalPipeline(
+        connectors=[searxng, arxiv, scholar],
+        scraper=scraper_service
+    )
 
 
 def get_query_repository(session: AsyncSession = Depends(get_db)) -> QueryRepository:
@@ -268,9 +285,8 @@ def get_strategy_learning_engine() -> StrategyLearningEngine:
 
 def get_iterative_research_coordinator(
     llm_service=Depends(get_llm_service),
-    search_service=Depends(get_search_service),
-    scraper_service=Depends(get_scraper_service),
-    page_understanding_service=Depends(get_page_understanding_service),
+    retrieval_pipeline: RetrievalPipeline = Depends(get_retrieval_pipeline),
+    page_understanding_service: PageUnderstandingService = Depends(get_page_understanding_service),
     knowledge_builder_service=Depends(get_knowledge_builder_service),
     gap_discovery_service=Depends(get_gap_discovery_service),
     research_planner_service=Depends(get_research_planner_service),
@@ -296,8 +312,7 @@ def get_iterative_research_coordinator(
     telemetry = TelemetryService(session_maker=_telemetry_session_maker)
     return IterativeResearchCoordinator(
         llm_service=llm_service,
-        search_service=search_service,
-        scraper_service=scraper_service,
+        retrieval_pipeline=retrieval_pipeline,
         page_understanding_service=page_understanding_service,
         knowledge_builder_service=knowledge_builder_service,
         gap_discovery_service=gap_discovery_service,

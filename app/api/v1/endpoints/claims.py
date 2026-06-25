@@ -3,7 +3,7 @@ from uuid import UUID
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.models.claim import ClaimExtractRequest, ClaimsResponse, ClaimRead, ExtractedClaim
+from app.models.claim import ClaimExtractRequest, ClaimsResponse, ClaimRead, ClaimCandidate
 from app.models.session import SessionStatus
 from app.models.event import EventType
 from app.events.bus import EventBus
