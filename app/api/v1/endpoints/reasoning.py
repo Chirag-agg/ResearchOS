@@ -21,7 +21,7 @@ from app.api.deps import (
     get_validation_repository,
     get_followup_query_repository,
 )
-from app.models.claim import ExtractedClaim
+from app.models.claim import ClaimCandidate
 from app.models.event import EventType, ResearchEvent
 from app.models.followup import FollowupQuery
 from app.models.gap import ResearchGap
@@ -357,6 +357,7 @@ async def get_session_reasoning(
             for idx, query in enumerate(query_records)
         )
 
+        seen_followup_ids = set()
         for gap in round_gaps:
             matching_followups = []
             for followup in round_followups:
@@ -379,16 +380,18 @@ async def get_session_reasoning(
             )
 
             for followup in matching_followups[:3]:
-                decisions.append(
-                    ReasoningDecisionRead(
-                        id=f"followup-{followup.id}",
-                        kind="followup_planning",
-                        round_number=round_number,
-                        title=followup.query,
-                        reason=followup.reason,
-                        evidence=[gap.topic, followup.priority.value],
+                if followup.id not in seen_followup_ids:
+                    seen_followup_ids.add(followup.id)
+                    decisions.append(
+                        ReasoningDecisionRead(
+                            id=f"followup-{followup.id}",
+                            kind="followup_planning",
+                            round_number=round_number,
+                            title=followup.query,
+                            reason=followup.reason,
+                            evidence=[gap.topic, followup.priority.value],
+                        )
                     )
-                )
 
         gap_ids = [str(gap.id) for gap in round_gaps]
         followup_ids = [str(followup.id) for followup in round_followups]

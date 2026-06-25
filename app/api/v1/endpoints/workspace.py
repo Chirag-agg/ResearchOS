@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.models.workspace import ResearchSourceRead, ResearchSourcesResponse
 from app.models.page_knowledge import PageKnowledge
 from app.models.knowledge import KnowledgeNode, KnowledgeEdge
-from app.models.claim import ExtractedClaim
+from app.models.claim import ClaimCandidate
 from app.models.search import SearchResult
 from app.models.fetched_page import FetchedPage
 from app.repositories.claim import ClaimRepository
