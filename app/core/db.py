@@ -8,7 +8,7 @@ from app.models.search import SearchResult
 from app.models.fetched_page import FetchedPage
 from app.models.step import ResearchStep
 from app.models.event import ResearchEvent
-from app.models.claim import ExtractedClaim
+from app.models.claim import Claim
 from app.models.validation import ClaimValidation
 from app.models.page_knowledge import PageKnowledge
 from app.models.knowledge import KnowledgeNode, KnowledgeEdge
