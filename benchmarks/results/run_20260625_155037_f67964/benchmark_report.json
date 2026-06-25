@@ -1,0 +1,43 @@
+{
+  "run_id": "run_20260625_155037_f67964",
+  "dataset_id": "test/question_001",
+  "results": {
+    "finding_recall": {
+      "score": 0.0,
+      "details": {
+        "found": 0
+      }
+    },
+    "process_retention": {
+      "score": 0.0,
+      "details": {
+        "nodes": 0,
+        "edges": 0
+      }
+    },
+    "query_diversity": {
+      "score": 1.0,
+      "details": {
+        "queries_generated": 0
+      }
+    },
+    "result_diversity": {
+      "score": 1.0,
+      "details": {
+        "pools": 0
+      }
+    },
+    "deduplication_savings": {
+      "score": 1.0,
+      "details": {
+        "duplicates_removed": 0
+      }
+    },
+    "connector_performance": {
+      "score": 1.0,
+      "details": {
+        "pools_analyzed": 0
+      }
+    }
+  }
+}
