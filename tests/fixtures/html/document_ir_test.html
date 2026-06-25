@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><title>Document IR Visual Debugger</title>
+<style>
+body { font-family: sans-serif; margin: 20px; background: #1e1e1e; color: #d4d4d4; }
+.node { border-left: 2px solid #555; margin-left: 20px; padding: 5px 0 5px 10px; }
+.node-type { font-weight: bold; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
+.DOCUMENT { color: #569cd6; border-left: 2px solid #569cd6; }
+.HEADING { color: #c586c0; border-left: 2px solid #c586c0; }
+.PARAGRAPH { color: #ce9178; border-left: 2px solid #ce9178; }
+.TABLE { color: #4ec9b0; border-left: 2px solid #4ec9b0; }
+.TABLE_ROW { color: #4ec9b0; border-left: 2px solid #4ec9b0; }
+.TABLE_CELL { color: #4ec9b0; border-left: 2px solid #4ec9b0; }
+.FIGURE { color: #dcdcaa; border-left: 2px solid #dcdcaa; }
+.EQUATION { color: #9cdcfe; border-left: 2px solid #9cdcfe; }
+.meta { color: #808080; font-size: 0.8em; margin-left: 10px; }
+.text-content { margin-top: 5px; font-family: monospace; color: #a9b7c6; background: #2b2b2b; padding: 5px; }
+</style>
+</head><body>
+<h1>Document IR Tree</h1>
+<div class="node DOCUMENT">
+<span class="node-type">DOCUMENT</span>
+<span class="meta">&lt;html&gt; | XPath: /html</span>
+<div class="node SECTION">
+<span class="node-type">SECTION</span>
+<span class="meta">&lt;h1&gt; | XPath: /html/body[1]</span>
+<div class="node HEADING">
+<span class="node-type">HEADING</span>
+<span class="meta">Level: 1 | &lt;h1&gt; | XPath: /html/body[1]</span>
+<div class="text-content">Test Document</div>
+</div>
+<div class="node PARAGRAPH">
+<span class="node-type">PARAGRAPH</span>
+<span class="meta">&lt;p&gt; | XPath: /html/body[3]</span>
+<div class="text-content">This is a paragraph before abstract.</div>
+</div>
+<div class="node SECTION">
+<span class="node-type">SECTION</span>
+<span class="meta">&lt;h2&gt; | XPath: /html/body[5]</span>
+<div class="node HEADING">
+<span class="node-type">HEADING</span>
+<span class="meta">Level: 2 | &lt;h2&gt; | XPath: /html/body[5]</span>
+<div class="text-content">Abstract</div>
+</div>
+<div class="node PARAGRAPH">
+<span class="node-type">PARAGRAPH</span>
+<span class="meta">&lt;p&gt; | XPath: /html/body[7]</span>
+<div class="text-content">This is the abstract.</div>
+</div>
+</div>
+<div class="node SECTION">
+<span class="node-type">SECTION</span>
+<span class="meta">&lt;h2&gt; | XPath: /html/body[9]</span>
+<div class="node HEADING">
+<span class="node-type">HEADING</span>
+<span class="meta">Level: 2 | &lt;h2&gt; | XPath: /html/body[9]</span>
+<div class="text-content">Methods</div>
+</div>
+<div class="node PARAGRAPH">
+<span class="node-type">PARAGRAPH</span>
+<span class="meta">&lt;p&gt; | XPath: /html/body[11]</span>
+<div class="text-content">Method details.</div>
+</div>
+<div class="node SECTION">
+<span class="node-type">SECTION</span>
+<span class="meta">&lt;h3&gt; | XPath: /html/body[13]</span>
+<div class="node HEADING">
+<span class="node-type">HEADING</span>
+<span class="meta">Level: 3 | &lt;h3&gt; | XPath: /html/body[13]</span>
+<div class="text-content">Sub method</div>
+</div>
+<div class="node PARAGRAPH">
+<span class="node-type">PARAGRAPH</span>
+<span class="meta">&lt;p&gt; | XPath: /html/body[15]</span>
+<div class="text-content">Sub details.</div>
+</div>
+</div>
+</div>
+<div class="node SECTION">
+<span class="node-type">SECTION</span>
+<span class="meta">&lt;h2&gt; | XPath: /html/body[17]</span>
+<div class="node HEADING">
+<span class="node-type">HEADING</span>
+<span class="meta">Level: 2 | &lt;h2&gt; | XPath: /html/body[17]</span>
+<div class="text-content">Results</div>
+</div>
+<div class="node TABLE">
+<span class="node-type">TABLE</span>
+<span class="meta">&lt;table&gt; | XPath: /html/body[19]</span>
+</div>
+</div>
+</div>
+</div>
+</body></html>
