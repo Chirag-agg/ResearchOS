@@ -4,6 +4,8 @@ import json
 import logging
 import os
 import re
+import sys
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
@@ -49,8 +51,8 @@ class ScraperError(Exception):
 class BrowserManager:
     """
     Manages a single shared Chromium browser instance with a reusable context.
-    Pages (tabs) are opened and closed per-URL fetch, keeping memory usage
-    bounded without the overhead of launching a new browser per request.
+    Runs Playwright in a dedicated background thread with its own event loop
+    to prevent Windows SelectorEventLoop subprocess issues under Uvicorn.
     """
 
     def __init__(self, timeout_ms: int = 30000):
@@ -58,54 +60,108 @@ class BrowserManager:
         self._playwright = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
+        
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
+        self._ready_event = threading.Event()
         self._lock = asyncio.Lock()
 
+    def _thread_worker(self):
+        """Worker function for the Playwright dedicated thread."""
+        if sys.platform == "win32":
+            loop = asyncio.ProactorEventLoop()
+        else:
+            loop = asyncio.new_event_loop()
+            
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        
+        loop.run_until_complete(self._start_playwright())
+        self._ready_event.set()
+        
+        try:
+            loop.run_forever()
+        finally:
+            loop.run_until_complete(self._stop_playwright())
+            loop.close()
+
+    async def _start_playwright(self):
+        logger.info("Launching shared Chromium browser instance in background thread...")
+        self._playwright = await async_playwright().start()
+        self._browser = await self._playwright.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ]
+        )
+        self._context = await self._browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            java_script_enabled=True,
+            ignore_https_errors=True,
+        )
+        logger.info("Chromium browser ready.")
+
+    async def _stop_playwright(self):
+        if self._context:
+            await self._context.close()
+            self._context = None
+        if self._browser:
+            await self._browser.close()
+            self._browser = None
+        if self._playwright:
+            await self._playwright.stop()
+            self._playwright = None
+        logger.info("Chromium browser shut down.")
+
     async def start(self) -> None:
-        """Launch the shared Chromium instance if not already running."""
+        """Start the Playwright background thread if not running."""
         async with self._lock:
-            if self._browser is not None:
+            if self._thread is not None:
                 return
 
-            logger.info("Launching shared Chromium browser instance...")
-            self._playwright = await async_playwright().start()
-            self._browser = await self._playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-gpu",
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ]
-            )
-            self._context = await self._browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/125.0.0.0 Safari/537.36"
-                ),
-                java_script_enabled=True,
-                ignore_https_errors=True,
-            )
-            logger.info("Chromium browser ready.")
+            self._thread = threading.Thread(target=self._thread_worker, daemon=True)
+            self._thread.start()
+            await asyncio.to_thread(self._ready_event.wait)
 
     async def stop(self) -> None:
-        """Gracefully shut down the browser and Playwright."""
+        """Gracefully shut down the browser thread."""
         async with self._lock:
-            if self._context:
-                await self._context.close()
-                self._context = None
-            if self._browser:
-                await self._browser.close()
-                self._browser = None
-            if self._playwright:
-                await self._playwright.stop()
-                self._playwright = None
-            logger.info("Chromium browser shut down.")
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+                await asyncio.to_thread(self._thread.join)
+            self._thread = None
+            self._loop = None
 
-    async def new_page(self):
-        """Open a new tab in the shared browser context."""
-        if self._context is None:
+    async def _do_fetch(self, url: str) -> tuple[Optional[str], str]:
+        """Internal coroutine that runs on the background loop."""
+        page = await self._context.new_page()
+        try:
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=self._timeout_ms
+            )
+            title = await page.title()
+            raw_html = await page.content()
+            return title, raw_html
+        finally:
+            try:
+                await page.close()
+            except Exception:
+                pass
+
+    async def fetch(self, url: str) -> tuple[Optional[str], str]:
+        """Fetch a page by dispatching to the background thread."""
+        if not self._loop:
             await self.start()
-        return await self._context.new_page()
+        future = asyncio.run_coroutine_threadsafe(self._do_fetch(url), self._loop)
+        return await asyncio.wrap_future(future)
 
     @property
     def timeout_ms(self) -> int:
@@ -149,23 +205,11 @@ class ScraperService:
         This method never raises — failures are captured in PageContent.fetch_status
         so one bad URL doesn't tank the entire batch.
         """
-        page = None
         try:
-            page = await self._browser_manager.new_page()
-
-            # Navigate with timeout
             logger.info(f"Fetching URL: {url}")
-            await page.goto(
-                url,
-                wait_until="domcontentloaded",
-                timeout=self._browser_manager.timeout_ms
-            )
-
-            # Extract page title
-            title = await page.title()
-
-            # Extract raw HTML
-            raw_html = await page.content()
+            
+            # Fetch using the background Playwright thread
+            title, raw_html = await self._browser_manager.fetch(url)
 
             # Store raw HTML to disk
             raw_html_path = self._store_raw_html(url, raw_html)
@@ -210,13 +254,6 @@ class ScraperService:
                 error_message=f"{error_type}: {str(e)[:500]}",
                 content_hash=self._compute_hash(""),
             )
-
-        finally:
-            if page:
-                try:
-                    await page.close()
-                except Exception:
-                    pass  # Best-effort tab cleanup
 
     def _store_raw_html(self, url: str, html: str) -> Optional[str]:
         """

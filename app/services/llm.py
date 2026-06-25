@@ -3,6 +3,7 @@ import logging
 import httpx
 from typing import List
 
+from app.models.query import ResearchIntentPlan
 from app.models.llm_metrics import LLMCallMetrics
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,9 @@ class LLMService:
             logger.warning(f"Ollama connection check failed at {self.api_url}: {e}")
             return False
 
-    async def generate_queries(self, question: str, adapted_instructions: str = None) -> List[str]:
+    async def plan_queries(self, question: str, adapted_instructions: str = None) -> ResearchIntentPlan:
         """
-        Converts a research question into structured search queries using local Ollama.
+        Converts a research question into a structured ResearchIntentPlan using local Ollama.
         """
         if not question.strip():
             raise LLMError("Research question cannot be empty.")
@@ -50,18 +51,20 @@ class LLMService:
             strategy_context = f"Additional Adaptation Instructions:\n{adapted_instructions}\n\n"
 
         prompt = (
-            "You are a search query optimizer. Given the user's research question, generate exactly 5 distinct, "
-            "high-quality search queries that will help retrieve relevant documents to answer the question.\n\n"
-            "Respond ONLY with a JSON object containing a list of strings under the key \"queries\". "
-            "Do NOT include markdown formatting, backticks, or any conversational text.\n\n"
-            "Example output format:\n"
+            "You are an expert research query planner. Given the user's research question, perform a structured intent analysis.\n"
+            "Identify the core entities, the appropriate timeframe, and the different search intents.\n"
+            "Valid intents are ONLY: [survey, paper, implementation, benchmark, dataset, comparison, news, blog, open_problem, historical]\n"
+            "Also output your confidence in understanding the query (0.0 to 1.0).\n"
+            "Then, generate a diverse set of search queries covering these intents and containing the core entities where relevant.\n\n"
+            "Respond ONLY with a JSON object matching this schema exactly:\n"
             "{\n"
-            "  \"queries\": [\n"
-            "    \"vector database benchmark\",\n"
-            "    \"qdrant vs weaviate\",\n"
-            "    \"vector database performance\"\n"
-            "  ]\n"
+            "  \"entities\": [\"list of core entities\"],\n"
+            "  \"timeframe\": \"relevant timeframe (e.g. 2024-2026, or irrelevant)\",\n"
+            "  \"intents\": [\"list of specific search intents from the valid list\"],\n"
+            "  \"queries\": [\"list of generated search queries\"],\n"
+            "  \"confidence\": 0.95\n"
             "}\n\n"
+            "Do NOT include markdown formatting, backticks, or any conversational text.\n\n"
             f"{strategy_context}"
             f"User Question: \"{question}\"\n\n"
             "JSON Output:\n"
@@ -103,33 +106,21 @@ class LLMService:
                 
                 logger.debug(f"Raw Ollama LLM response: {llm_response}")
                 
+                # Parse the ResearchIntentPlan
                 try:
-                    parsed = json.loads(llm_response)
-                except json.JSONDecodeError as e:
-                    raise LLMError(f"Failed to parse Ollama JSON response: {e}. Output: {llm_response}")
-                
-                if isinstance(parsed, dict) and "queries" in parsed:
-                    queries = parsed["queries"]
-                elif isinstance(parsed, list):
-                    queries = parsed
-                else:
-                    raise LLMError(f"Ollama returned unexpected JSON structure. Output: {llm_response}")
-                
-                if not isinstance(queries, list):
-                    raise LLMError(f"Queries must be a list of strings. Received: {type(queries)}")
-                
-                cleaned_queries = []
-                for q in queries:
-                    if isinstance(q, str):
-                        cleaned = q.strip().strip('"').strip("'").strip()
-                        if cleaned:
-                            cleaned_queries.append(cleaned)
-                
-                if not cleaned_queries:
-                    raise LLMError("No valid queries could be parsed from Ollama response.")
-                
-                return cleaned_queries
-                
+                    plan_data = json.loads(llm_response)
+                    if "queries" not in plan_data:
+                        raise ValueError("Missing 'queries' array.")
+                    
+                    if "entities" not in plan_data: plan_data["entities"] = []
+                    if "timeframe" not in plan_data: plan_data["timeframe"] = "unknown"
+                    if "intents" not in plan_data: plan_data["intents"] = []
+                    if "confidence" not in plan_data: plan_data["confidence"] = 1.0
+                        
+                    return ResearchIntentPlan(**plan_data)
+                except Exception as e:
+                    logger.error(f"Failed to parse research plan JSON: {llm_response}")
+                    raise LLMError(f"Malformed JSON output from Ollama: {e}")
         except httpx.HTTPStatusError as e:
             logger.error(f"Ollama HTTP error: {e.response.status_code} - {e.response.text}")
             raise LLMError(f"Ollama server returned HTTP error status: {e.response.status_code}")
